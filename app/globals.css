@@ -86,3 +86,32 @@
 .editorMediaList button:hover{border-color:#1682ff}
 @media(max-width:1000px){.studioEditor{grid-template-columns:1fr}.editorSide{max-height:none}.editorLayerList{max-height:180px}}
 @media(max-width:700px){.studioEditor{grid-template-columns:1fr}.editorButtons{grid-template-columns:1fr}.editorButtons button:last-child{grid-column:auto}.properties{grid-template-columns:1fr 1fr}.editorCanvas{padding:4px}}
+
+/* Full OBS-style transform / layer editor */
+.editorToolbar{display:flex;align-items:center;gap:5px;flex-wrap:wrap;background:#0c1119;border:1px solid #202837;border-radius:5px;padding:6px;margin-bottom:7px}
+.editorToolbar button{background:#18202c;border:1px solid #293143;border-radius:4px;padding:6px 8px;font-size:7px;font-weight:900}
+.editorToolbar button.active{background:#1682ff;border-color:#1682ff;color:#fff}
+.editorToolbar label{display:flex;align-items:center;gap:5px;margin-left:auto;color:#69758a;font-size:7px;font-weight:900}
+.editorToolbar input{width:85px;accent-color:#1682ff}
+.editorToolbar label b{color:#dce2ec;width:28px}
+.editorZoomViewport{transition:width .12s ease}
+.editorCanvas{min-height:260px}
+.editorComposition{margin:0 auto}
+.compositionLayer{z-index:2}
+.compositionLayer.selected{z-index:50}
+.resizeHandle{position:absolute!important;inset:auto!important;width:9px!important;height:9px!important;background:#1682ff!important;border:1px solid #fff!important;border-radius:2px!important;z-index:100!important;padding:0!important}
+.resizeHandle.h-nw{left:-5px!important;top:-5px!important;cursor:nwse-resize!important}
+.resizeHandle.h-n{left:calc(50% - 4px)!important;top:-5px!important;cursor:ns-resize!important}
+.resizeHandle.h-ne{right:-5px!important;top:-5px!important;cursor:nesw-resize!important}
+.resizeHandle.h-e{right:-5px!important;top:calc(50% - 4px)!important;cursor:ew-resize!important}
+.resizeHandle.h-se{right:-5px!important;bottom:-5px!important;cursor:nwse-resize!important}
+.resizeHandle.h-s{left:calc(50% - 4px)!important;bottom:-5px!important;cursor:ns-resize!important}
+.resizeHandle.h-sw{left:-5px!important;bottom:-5px!important;cursor:nesw-resize!important}
+.resizeHandle.h-w{left:-5px!important;top:calc(50% - 4px)!important;cursor:ew-resize!important}
+.compositionLayer img,.compositionLayer video{position:absolute;max-width:none;object-fit:fill}
+.editorLayerRow{grid-template-columns:20px 18px minmax(0,1fr) auto 24px}
+.editorLayerRow .layerEye,.editorLayerRow .layerLock{background:transparent;padding:0;border:0;color:#dce2ec;font-size:10px}
+.editorLayerRow .layerEye:hover,.editorLayerRow .layerLock:hover{color:#1682ff}
+.editorLayerRow.selected .layerEye,.editorLayerRow.selected .layerLock{color:#fff}
+.properties label:nth-child(2){grid-column:1/2}
+.properties label:nth-child(3){grid-column:2/3}

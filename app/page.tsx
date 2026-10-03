@@ -178,7 +178,7 @@ export default function Home(){
     setSources(v=>[...v,source]);setActiveSource(source.id);setPreviewMediaId("");setPreviewWebUrl(embed||raw);setPreviewPlaying(false);notify(embed?"YouTube video loaded into Preview":"Web page loaded into Preview");
   };
 
-  const take=(mode:"cut"|"fade"=transition,time=previewClock)=>{
+  const take=(mode:"cut"|"fade"=transition,time=previewTime)=>{
     if(!previewMedia&&!previewWebUrl&&previewLayers.length===0){
       notify("Build a Preview composition first");
       return;

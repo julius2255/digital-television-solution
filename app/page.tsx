@@ -1,8 +1,6 @@
 "use client";
 
 import {useEffect,useRef,useState} from "react";
-import type {RefObject} from "react";
-
 type Section="studio"|"playlist"|"schedule"|"news"|"media"|"streaming"|"analytics"|"settings";
 type MediaFile={id:string;name:string;type:string;url:string;size:number};
 type Scene={id:string;name:string};
@@ -61,8 +59,6 @@ export default function Home(){
   const notify=(message:string)=>{setToast(message);setTimeout(()=>setToast(""),2200)};
   const previewMedia=mediaFiles.find(f=>f.id===previewMediaId)||null;
   const programMedia=mediaFiles.find(f=>f.id===programMediaId)||null;
-
-  useEffect(()=>()=>mediaFiles.forEach(f=>URL.revokeObjectURL(f.url)),[mediaFiles]);
 
   const addFiles=(files:FileList|null)=>{
     if(!files)return;
@@ -188,6 +184,8 @@ function Studio(p:{
 }){
   const previewRef=useRef<HTMLVideoElement>(null);
   const programRef=useRef<HTMLVideoElement>(null);
+  const [previewClock,setPreviewClock]=useState(0);
+  const [programClock,setProgramClock]=useState(0);
 
   useEffect(()=>{if(previewRef.current)previewRef.current.volume=p.volume},[p.volume,p.preview?.id]);
   useEffect(()=>{if(programRef.current)programRef.current.volume=p.volume},[p.volume,p.program?.id]);
@@ -213,8 +211,8 @@ function Studio(p:{
         {!file&&<span className="screenEmpty">{preview?"SELECT A MEDIA ITEM":"PROGRAM STANDBY"}</span>}
         {file?.type.startsWith("video/")&&<video
           ref={preview?previewRef:programRef} key={file.id} src={file.url} muted={p.muted} preload="auto" playsInline
-          onTimeUpdate={e=>{if(preview){(e.currentTarget.dataset as DOMStringMap).time=String(e.currentTarget.currentTime)}}}
-          onLoadedMetadata={e=>{e.currentTarget.currentTime=preview?p.previewTime:p.programTime}}
+          onTimeUpdate={e=>{preview?setPreviewClock(e.currentTarget.currentTime):setProgramClock(e.currentTarget.currentTime)}}
+          onLoadedMetadata={e=>{e.currentTarget.currentTime=preview?p.previewTime:p.programTime;if(preview)setPreviewClock(p.previewTime);else setProgramClock(p.programTime)}}
           onEnded={()=>{if(preview)p.stopPreview()}}
         />}
         {file?.type.startsWith("image/")&&<img src={file.url} alt={file.name}/>}
@@ -223,7 +221,7 @@ function Studio(p:{
       </div>
       <div className="previewControls">
         <button className="playMain" onClick={preview?p.togglePreview:()=>{}}>{preview?(p.previewPlaying?"Ⅱ Pause":"▶ Play"):"▶"}</button>
-        <span>{preview?fmt(p.previewTime):fmt(p.programTime)}</span>
+        <span>{preview?fmt(previewClock):fmt(programClock)}</span>
         <div className="miniMeter"><i className={((preview?p.previewPlaying:p.programPlaying)&&!p.muted)?"meterLive":""}/></div>
         <button onClick={()=>p.setMuted(!p.muted)}>{p.muted?"🔇":"🔊"}</button>
         <input type="range" min="0" max="1" step=".01" value={p.volume} onChange={e=>p.setVolume(Number(e.target.value))}/>

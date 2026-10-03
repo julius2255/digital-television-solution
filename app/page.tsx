@@ -498,11 +498,15 @@ function News({notify}:{notify:(x:string)=>void}){
     if(typeof window==="undefined"||!("speechSynthesis" in window)){notify("Voice is not supported by this browser");return;}
     window.speechSynthesis.cancel();
     const utterance=new SpeechSynthesisUtterance([item.title,item.description].filter(Boolean).join(". "));
-    utterance.rate=.92; utterance.pitch=1; utterance.volume=1;
+    const voices=window.speechSynthesis.getVoices();
+    const v=voices.find(x=>x.name===voiceName)||voices.find(x=>/^en-KE/i.test(x.lang))||voices.find(x=>/^en-GB/i.test(x.lang))||voices.find(x=>/^en-US/i.test(x.lang));
+    if(v)utterance.voice=v;
+    utterance.lang=v?.lang||"en-KE"; utterance.rate=.78; utterance.pitch=.98; utterance.volume=1;
     utterance.onstart=()=>setSpeaking(true); utterance.onend=()=>setSpeaking(false); utterance.onerror=()=>setSpeaking(false);
     window.speechSynthesis.speak(utterance); notify("AUTO VOICE: reading headline");
   };
-  const stopVoice=()=>{if(typeof window!=="undefined"&&"speechSynthesis" in window)window.speechSynthesis.cancel();setSpeaking(false)};\n  useEffect(()=>{if(typeof window==="undefined"||!("speechSynthesis" in window))return;const load=()=>setVoiceOptions(window.speechSynthesis.getVoices());load();window.speechSynthesis.addEventListener("voiceschanged",load);return()=>window.speechSynthesis.removeEventListener("voiceschanged",load)},[]);
+  const stopVoice=()=>{if(typeof window!=="undefined"&&"speechSynthesis" in window)window.speechSynthesis.cancel();setSpeaking(false)};
+  useEffect(()=>{if(typeof window==="undefined"||!("speechSynthesis" in window))return;const load=()=>setVoiceOptions(window.speechSynthesis.getVoices());load();window.speechSynthesis.addEventListener("voiceschanged",load);return()=>window.speechSynthesis.removeEventListener("voiceschanged",load)},[]);
   useEffect(()=>{
     const load=async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category),{cache:"no-store"});const j=await r.json();setItems(j.items||[])}catch{notify("News feed connection failed")}finally{setLoading(false)}};
     load();const id=window.setInterval(load,refresh*60000);return()=>{window.clearInterval(id);stopVoice()};

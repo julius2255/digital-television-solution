@@ -237,7 +237,7 @@ function Studio(p:{
   },[p.programPlaying,p.program?.id]);
 
   const fmt=(s:number)=>String(Math.floor(s/60)).padStart(2,"0")+":"+String(Math.floor(s%60)).padStart(2,"0");
-  const controlYouTube=(ref:React.RefObject<HTMLIFrameElement|null>,action:"playVideo"|"pauseVideo")=>{
+  const controlYouTube=(ref:{current:HTMLIFrameElement|null},action:"playVideo"|"pauseVideo")=>{
     ref.current?.contentWindow?.postMessage(JSON.stringify({event:"command",func:action,args:[]}),"*");
   };
   useEffect(()=>{if(p.previewWebUrl&&isYoutubeEmbed(p.previewWebUrl))controlYouTube(previewWebRef,p.previewPlaying?"playVideo":"pauseVideo")},[p.previewPlaying,p.previewWebUrl]);

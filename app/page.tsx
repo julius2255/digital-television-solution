@@ -57,7 +57,7 @@ export default function Home(){
     <section className="main">
       <header><div><small className="eyebrow">DIGITAL TELEVISION SOLUTION</small><h1>{sections.find(x=>x[0]===section)?.[2]}</h1></div><div className="actions"><span>● System Ready</span><button className="go" onClick={toggleLive}>{live?"STOP LIVE":"GO LIVE"}</button></div></header>
 
-      {section==="studio"&&<Studio live={live} scene={scene} setScene={setScene} scenes={scenes} addScene={addScene} source={source} setSource={selectSource} playing={playing} togglePlayback={togglePlayback} resetPlayback={resetPlayback} elapsed={elapsed}/>}
+      {section==="studio"&&<Studio live={live} scene={scene} setScene={setScene} scenes={scenes} addScene={addScene} source={source} setSource={selectSource} playing={playing} togglePlayback={togglePlayback} resetPlayback={resetPlayback} elapsed={elapsed} selectedMedia={mediaFiles.find(f=>f.id===selectedMedia)||null}/>}
       {section==="schedule"&&<Schedule rows={schedule} add={addProgramme}/>}
       {section==="news"&&<News notify={notify}/>}
       {section==="media"&&<Media upload={upload} files={mediaFiles} selected={selectedMedia} select={selectMedia} remove={removeMedia} fileInputRef={fileInputRef} onFiles={handleFiles}/>}
@@ -71,12 +71,12 @@ export default function Home(){
   </main>;
 }
 
-function Studio({live,scene,setScene,scenes,addScene,source,setSource,playing,togglePlayback,resetPlayback,elapsed}:{live:boolean;scene:string;setScene:(x:string)=>void;scenes:string[];addScene:()=>void;source:string;setSource:(x:string)=>void;playing:boolean;togglePlayback:()=>void;resetPlayback:()=>void;elapsed:string}){
+function Studio({live,scene,setScene,scenes,addScene,source,setSource,playing,togglePlayback,resetPlayback,elapsed,selectedMedia}:{live:boolean;scene:string;setScene:(x:string)=>void;scenes:string[];addScene:()=>void;source:string;setSource:(x:string)=>void;playing:boolean;togglePlayback:()=>void;resetPlayback:()=>void;elapsed:string;selectedMedia:{name:string;type:string;url:string}|null}){
   const sources=[["📷","Camera"],["🎞","Video"],["🖼","Image"],["🔤","Text"],["🎙","Microphone"],["🌐","Browser"],["📰","Auto News"],["©","Logo"]];
   return <div className="grid studio">
     <div className="panel preview">
       <div className="title"><b>PROGRAM OUTPUT</b><em>{live?"LIVE":"PREVIEW"}</em></div>
-      <div className="screen"><strong>DIGITAL TELEVISION</strong><span>{live?scene.toUpperCase():"READY TO BROADCAST"}</span><small>{source} • {playing?"PLAYING":"PAUSED"}</small></div>
+      <div className="screen">{selectedMedia&&source==="Video"&&selectedMedia.type.startsWith("video/")?<video src={selectedMedia.url} controls={false} autoPlay={playing} muted playsInline/>:selectedMedia&&source==="Image"&&selectedMedia.type.startsWith("image/")?<img src={selectedMedia.url} alt={selectedMedia.name}/>:selectedMedia&&source==="Microphone"&&selectedMedia.type.startsWith("audio/")?<div className="mediaAudio"><strong>🎵 {selectedMedia.name}</strong><audio src={selectedMedia.url} controls autoPlay={playing}/></div>:<><strong>DIGITAL TELEVISION</strong><span>{live?scene.toUpperCase():"READY TO BROADCAST"}</span><small>{source} • {playing?"PLAYING":"PAUSED"}{selectedMedia?` • ${selectedMedia.name}`:""}</small></>}</div>
       <div className="transport"><button onClick={togglePlayback}>{playing?"Ⅱ":"▶"}</button><button onClick={resetPlayback}>⏹</button><label>{elapsed}</label></div>
     </div>
     <div className="panel"><div className="title"><b>SCENES</b><button onClick={addScene}>＋ New Scene</button></div>{scenes.map(s=><button key={s} onClick={()=>setScene(s)} className={"scene "+(scene===s?"selected":"")}>▣ {s}<small>{scene===s?"ACTIVE":"SELECT"}</small></button>)}</div>

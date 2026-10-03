@@ -10,7 +10,7 @@ const sections:[Section,string,string][]=[
   ["audience","👥","Audience & Sharing"],["settings","⚙","Settings"]
 ];
 
-type Layer={id:string;name:string;kind:string;url?:string;type?:string;visible:boolean};
+type Layer={id:string;name:string;kind:string;url?:string;type?:string;visible:boolean};\ntype MediaFile={id:string;name:string;type:string;url:string;size:number};
 
 const seedSchedule=[
   ["07:00","Morning Jolly Show","Camera"],["10:00","Morning News","Auto News"],
@@ -45,7 +45,7 @@ export default function Home(){
   const addProgramme=()=>{const n=prompt("Programme name");if(!n?.trim())return;const t=prompt("Start time (HH:MM)","12:00")||"12:00";setSchedule(v=>[...v,[t,n.trim(),"Video"]].sort((a,b)=>a[0].localeCompare(b[0])));notify("Programme added")};
   const upload=()=>fileInputRef.current?.click();
   const handleFiles=(files:FileList|null)=>{if(!files)return;const incoming=Array.from(files).map((file,i)=>({id:String(Date.now())+"-"+i,name:file.name,type:file.type||"file",url:URL.createObjectURL(file),size:file.size}));setMediaFiles(v=>[...v,...incoming]);if(incoming[0]){setSelectedMedia(incoming[0].id);selectSource(incoming[0].type.startsWith("image/")?"Image":incoming[0].type.startsWith("audio/")?"Microphone":"Video")}notify(incoming.length+" media file"+(incoming.length===1?"":"s")+" added")};
-  const selectMedia=(id:string)=>{const f=mediaFiles.find(x=>x.id===id);if(!f)return;setSelectedMedia(id);selectSource(f.type.startsWith("image/")?"Image":f.type.startsWith("audio/")?"Microphone":"Video");setPlaying(false);setElapsed("00:00:00");notify(f.name+" selected")};
+  const selectMedia=(id:string)=>{const f=mediaFiles.find(x=>x.id===id);if(!f)return;setSelectedMedia(id);selectSource(f.type.startsWith("image/")?"Image":f.type.startsWith("audio/")?"Microphone":"Video");notify(f.name+" ready in Preview — Program continues")};
   const removeMedia=(id:string)=>{setMediaFiles(v=>{const f=v.find(x=>x.id===id);if(f)URL.revokeObjectURL(f.url);return v.filter(x=>x.id!==id)});if(selectedMedia===id)setSelectedMedia("");notify("Media removed")};
   const toggleDestination=(n:string)=>{setConnected(v=>({...v,[n]:!v[n]}));notify((connected[n]?"Disconnected ":"Connected ")+n)};
   const selectSource=(n:string)=>{setSource(n);notify(n+" source selected")};

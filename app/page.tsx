@@ -113,15 +113,16 @@ export default function Home(){
     setSources(v=>[...v,source]);setActiveSource(source.id);notify("Web source added to Preview");
   };
 
-  const take=()=>{
+  const take=(mode:"cut"|"fade"=transition,time=0)=>{
     if(!previewMedia){
       notify("Select and play a media item in Preview first");
       return;
     }
     setProgramMediaId(previewMedia.id);
     setProgramPlaying(previewPlaying);
-    setProgramTime(previewTime);
-    notify(transition==="fade"?"FADE to Program":"CUT to Program");
+    setProgramTime(time);
+    setTransition(mode);
+    notify(mode==="fade"?"FADE to Program":"CUT to Program");
   };
 
   const togglePreview=()=>{
@@ -186,6 +187,7 @@ function Studio(p:{
   const programRef=useRef<HTMLVideoElement>(null);
   const [previewClock,setPreviewClock]=useState(0);
   const [programClock,setProgramClock]=useState(0);
+  const [fadePulse,setFadePulse]=useState(false);
 
   useEffect(()=>{if(previewRef.current)previewRef.current.volume=p.volume},[p.volume,p.preview?.id]);
   useEffect(()=>{if(programRef.current)programRef.current.volume=p.volume},[p.volume,p.program?.id]);

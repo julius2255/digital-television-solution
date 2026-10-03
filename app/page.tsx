@@ -183,7 +183,7 @@ export default function Home(){
 function Studio(p:{
   preview:MediaFile|null;program:MediaFile|null;previewWebUrl:string;programWebUrl:string;previewPlaying:boolean;programPlaying:boolean;
   previewTime:number;programTime:number;volume:number;muted:boolean;setVolume:(v:number)=>void;setMuted:(v:boolean)=>void;
-  togglePreview:()=>void;stopPreview:()=>void;take:()=>void;transition:"cut"|"fade";setTransition:(v:"cut"|"fade")=>void;
+  togglePreview:()=>void;stopPreview:()=>void;toggleProgram:()=>void;take:(mode?:"cut"|"fade",time?:number)=>void;transition:"cut"|"fade";setTransition:(v:"cut"|"fade")=>void;
   live:boolean;toggleLive:()=>void;scenes:Scene[];activeScene:string;setActiveScene:(v:string)=>void;addScene:()=>void;
   sources:Source[];activeSource:string;setActiveSource:(v:string)=>void;addSource:()=>void;addWebSource:()=>void;
   mediaFiles:MediaFile[];selectMedia:(id:string)=>void;selectWeb:(url:string)=>void;upload:()=>void;
@@ -216,7 +216,7 @@ function Studio(p:{
       <div className="screenLabel"><b>{preview?"PREVIEW":"PROGRAM"}</b><span>{preview?(p.previewPlaying?"PLAYING":"READY"):(p.programPlaying?"LIVE":"STANDBY")}</span></div>
       <div className="screen">
         {!file&&!(preview?p.previewWebUrl:p.programWebUrl)&&<span className="screenEmpty">{preview?"SELECT A MEDIA ITEM":"PROGRAM STANDBY"}</span>}
-        {(preview?p.previewWebUrl:p.programWebUrl)&&<iframe className="webFrame" src={preview?p.previewWebUrl:p.programWebUrl} title={preview?"Web Preview":"Live Web Source"} />
+        {(preview?p.previewWebUrl:p.programWebUrl)&&<iframe className="webFrame" src={preview?p.previewWebUrl:p.programWebUrl} title={preview?"Web Preview":"Live Web Source"} />}
         {file?.type.startsWith("video/")&&<video
           ref={preview?previewRef:programRef} key={file.id} src={file.url} muted={p.muted} preload="auto" playsInline
           onTimeUpdate={e=>{preview?setPreviewClock(e.currentTarget.currentTime):setProgramClock(e.currentTarget.currentTime)}}

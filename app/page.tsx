@@ -493,7 +493,7 @@ function News({notify}:{notify:(x:string)=>void}){
   const [category,setCategory]=useState("Kenya"); const [source,setSource]=useState("TUKO NEWS");
   const [autoVoice,setAutoVoice]=useState(true); const [ticker,setTicker]=useState(true); const [refresh,setRefresh]=useState(5);
   const [items,setItems]=useState<{title:string;description:string;link:string;published:string}[]>([]);
-  const [loading,setLoading]=useState(false); const [selected,setSelected]=useState(0); const [speaking,setSpeaking]=useState(false);
+  const [loading,setLoading]=useState(false); const [selected,setSelected]=useState(0); const [speaking,setSpeaking]=useState(false); const [voiceName,setVoiceName]=useState(""); const [voiceOptions,setVoiceOptions]=useState<SpeechSynthesisVoice[]>([]);
   const speakHeadline=(item:{title:string;description:string})=>{
     if(typeof window==="undefined"||!("speechSynthesis" in window)){notify("Voice is not supported by this browser");return;}
     window.speechSynthesis.cancel();
@@ -502,9 +502,9 @@ function News({notify}:{notify:(x:string)=>void}){
     utterance.onstart=()=>setSpeaking(true); utterance.onend=()=>setSpeaking(false); utterance.onerror=()=>setSpeaking(false);
     window.speechSynthesis.speak(utterance); notify("AUTO VOICE: reading headline");
   };
-  const stopVoice=()=>{if(typeof window!=="undefined"&&"speechSynthesis" in window)window.speechSynthesis.cancel();setSpeaking(false)};
+  const stopVoice=()=>{if(typeof window!=="undefined"&&"speechSynthesis" in window)window.speechSynthesis.cancel();setSpeaking(false)};\n  useEffect(()=>{if(typeof window==="undefined"||!("speechSynthesis" in window))return;const load=()=>setVoiceOptions(window.speechSynthesis.getVoices());load();window.speechSynthesis.addEventListener("voiceschanged",load);return()=>window.speechSynthesis.removeEventListener("voiceschanged",load)},[]);
   useEffect(()=>{
-    const load=async()=>{setLoading(true);try{const r=await fetch("/api/news",{cache:"no-store"});const j=await r.json();setItems(j.items||[])}catch{notify("News feed connection failed")}finally{setLoading(false)}};
+    const load=async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category),{cache:"no-store"});const j=await r.json();setItems(j.items||[])}catch{notify("News feed connection failed")}finally{setLoading(false)}};
     load();const id=window.setInterval(load,refresh*60000);return()=>{window.clearInterval(id);stopVoice()};
   },[refresh]);
   useEffect(()=>{if(autoVoice&&items.length)speakHeadline(items[selected%items.length])},[selected,autoVoice]);
@@ -516,8 +516,8 @@ function News({notify}:{notify:(x:string)=>void}){
       {current&&<div className="newsHeadline"><b>{current.title}</b><small>{current.description}</small><a href={current.link} target="_blank" rel="noreferrer">Open source</a></div>}
       <div className="ticker">{ticker?"KENYA • AFRICA • WORLD • SPORTS • BUSINESS • ENTERTAINMENT":"Ticker disabled"}</div>
       <div className="newsControls"><select value={category} onChange={e=>setCategory(e.target.value)}>{["Kenya","Africa","World","Sports","Business","Entertainment","Weather"].map(x=><option key={x}>{x}</option>)}</select>
-      <select value={source} onChange={e=>setSource(e.target.value)}>{["TUKO NEWS","STANDARD MEDIA","GDELT / GLOBAL","Custom RSS / API"].map(x=><option key={x}>{x}</option>)}</select>
-      <label><input type="checkbox" checked={autoVoice} onChange={e=>setAutoVoice(e.target.checked)}/> AUTO VOICE</label><label><input type="checkbox" checked={ticker} onChange={e=>setTicker(e.target.checked)}/> TICKER</label><span>Refresh {refresh} min</span></div>
+      <select value={source} onChange={e=>setSource(e.target.value)}>{["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD"].map(x=><option key={x}>{x}</option>)}</select>
+      <label><input type="checkbox" checked={autoVoice} onChange={e=>setAutoVoice(e.target.checked)}/> AUTO VOICE</label><label><input type="checkbox" checked={ticker} onChange={e=>setTicker(e.target.checked)}/> TICKER</label><span>Refresh {refresh} min</span><select value={voiceName} onChange={e=>setVoiceName(e.target.value)}><option value="">Best English voice</option>{voiceOptions.map(v=><option key={v.name+"-"+v.lang} value={v.name}>{v.name} ({v.lang})</option>)}</select></div>
     </div>
     <div className="buttons">
       <button onClick={()=>{if(!items.length){notify("No headline available");return}const next=(selected+1)%items.length;setSelected(next);if(autoVoice)speakHeadline(items[next])}}>▶ Next + Read</button>
@@ -526,7 +526,7 @@ function News({notify}:{notify:(x:string)=>void}){
       <button onClick={async()=>{setLoading(true);try{const r=await fetch("/api/news",{cache:"no-store"});const j=await r.json();setItems(j.items||[]);setSelected(0);notify("Loaded "+(j.items||[]).length+" headlines")}catch{notify("News refresh failed")}finally{setLoading(false)}}}>↻ Refresh Now</button>
     </div>
   </div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>
-    {["TUKO NEWS","STANDARD MEDIA","GDELT / GLOBAL","Custom RSS / API"].map(s=><div className="health" key={s}><span>{s}</span><b>{source===s?"ACTIVE":"Ready"}</b></div>)}
+    {["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD"].map(s=><div className="health" key={s}><span>{s}</span><b>{source===s?"ACTIVE":"Ready"}</b></div>)}
     <div className="panel" style={{marginTop:12}}><div className="title"><b>VOICE ENGINE</b><em>{speaking?"SPEAKING":"READY"}</em></div><p className="muted">Browser text-to-speech is active for newsroom testing and preview. It uses the device voice and follows AUTO VOICE.</p></div>
   </div></div>
 }

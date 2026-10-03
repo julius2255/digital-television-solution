@@ -94,7 +94,7 @@ export default function Home(){
     setPreviewPlaying(true);
     setProgramMediaId(media.id);
     setProgramWebUrl("");
-    setProgramLayers([{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,visible:true,locked:false}]);
+    setProgramLayers([{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false}]);
     setProgramPlaying(true);
     setProgramTime(0);
     setActiveSource("media");
@@ -205,12 +205,12 @@ export default function Home(){
     if(!media){notify("Scheduled media is not available");return;}
     setPreviewMediaId(media.id);
     setPreviewWebUrl("");
-    setPreviewLayers(prev=>[{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,visible:true,locked:false},...prev.filter(x=>x.id!=="base")]);
+    setPreviewLayers(prev=>[{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false},...prev.filter(x=>x.id!=="base")]);
     setPreviewPlaying(true);
     setPreviewTime(0);
     setProgramMediaId(media.id);
     setProgramWebUrl("");
-    setProgramLayers([{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,visible:true,locked:false}]);
+    setProgramLayers([{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false}]);
     setProgramPlaying(true);
     setProgramTime(0);
     setActiveSource("media");

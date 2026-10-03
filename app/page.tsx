@@ -10,6 +10,8 @@ const sections:[Section,string,string][]=[
   ["audience","👥","Audience & Sharing"],["settings","⚙","Settings"]
 ];
 
+type Layer={id:string;name:string;kind:string;url?:string;type?:string;visible:boolean};
+
 const seedSchedule=[
   ["07:00","Morning Jolly Show","Camera"],["10:00","Morning News","Auto News"],
   ["11:15","Upishi Bora","Video"],["13:00","Habari Mchana","Auto News"],
@@ -30,6 +32,9 @@ export default function Home(){
   const [elapsed,setElapsed]=useState("00:00:00");
   const [mediaFiles,setMediaFiles]=useState<{id:string;name:string;type:string;url:string;size:number}[]>([]);
   const [selectedMedia,setSelectedMedia]=useState("");
+  const [layers,setLayers]=useState<Layer[]>([{id:"camera-base",name:"Live Camera",kind:"Camera",visible:true}]);
+  const [selectedLayer,setSelectedLayer]=useState("camera-base");
+  const [programLayers,setProgramLayers]=useState<Layer[]>([{id:"camera-base",name:"Live Camera",kind:"Camera",visible:true}]);
   const fileInputRef=useRef<HTMLInputElement>(null);
   useEffect(()=>{if(!playing)return;const timer=setInterval(()=>setElapsed(v=>{const p=v.split(":").map(Number);let s=p[0]*3600+p[1]*60+p[2]+1;return [Math.floor(s/3600),Math.floor((s%3600)/60),s%60].map(n=>String(n).padStart(2,"0")).join(":")}),1000);return()=>clearInterval(timer)},[playing]);
   useEffect(()=>()=>mediaFiles.forEach(f=>URL.revokeObjectURL(f.url)),[mediaFiles]);
@@ -46,6 +51,11 @@ export default function Home(){
   const selectSource=(n:string)=>{setSource(n);notify(n+" source selected")};
   const togglePlayback=()=>{setPlaying(v=>!v);notify(playing?"Playback paused":"Playback started")};
   const resetPlayback=()=>{setPlaying(false);setElapsed("00:00:00");notify("Playback reset")};
+  const addLayer=()=>{const f=mediaFiles.find(x=>x.id===selectedMedia);const kind=f?(f.type.startsWith("image/")?"Image":f.type.startsWith("audio/")?"Audio":"Video"):source;const layer:Layer={id:String(Date.now()),name:f?.name||kind,kind,url:f?.url,type:f?.type,visible:true};setLayers(v=>[...v,layer]);setSelectedLayer(layer.id);notify(layer.name+" added as layer")};
+  const addTextLayer=()=>{const t=prompt("Text to add to preview","DIGITAL TELEVISION");if(t?.trim()){const layer:Layer={id:String(Date.now()),name:t.trim(),kind:"Text",visible:true};setLayers(v=>[...v,layer]);setSelectedLayer(layer.id);notify("Text layer added")}};
+  const removeLayer=()=>{if(selectedLayer==="camera-base")return;setLayers(v=>v.filter(x=>x.id!==selectedLayer));setSelectedLayer("camera-base");notify("Layer removed")};
+  const toggleLayer=(id:string)=>setLayers(v=>v.map(x=>x.id===id?{...x,visible:!x.visible}:x));
+  const cutToProgram=()=>{setProgramLayers(layers.filter(x=>x.visible));notify("Preview sent to Program")};
 
   return <main className="app">
     <aside className="sidebar">
@@ -57,7 +67,7 @@ export default function Home(){
     <section className="main">
       <header><div><small className="eyebrow">DIGITAL TELEVISION SOLUTION</small><h1>{sections.find(x=>x[0]===section)?.[2]}</h1></div><div className="actions"><span>● System Ready</span><button className="go" onClick={toggleLive}>{live?"STOP LIVE":"GO LIVE"}</button></div></header>
 
-      {section==="studio"&&<Studio live={live} scene={scene} setScene={setScene} scenes={scenes} addScene={addScene} source={source} setSource={selectSource} playing={playing} togglePlayback={togglePlayback} resetPlayback={resetPlayback} elapsed={elapsed} selectedMedia={mediaFiles.find(f=>f.id===selectedMedia)||null}/>}
+      {section==="studio"&&<Studio live={live} scene={scene} setScene={setScene} scenes={scenes} addScene={addScene} source={source} setSource={selectSource} playing={playing} togglePlayback={togglePlayback} resetPlayback={resetPlayback} elapsed={elapsed} selectedMedia={mediaFiles.find(f=>f.id===selectedMedia)||null} layers={layers} programLayers={programLayers} selectedLayer={selectedLayer} setSelectedLayer={setSelectedLayer} addLayer={addLayer} addTextLayer={addTextLayer} removeLayer={removeLayer} toggleLayer={toggleLayer} cutToProgram={cutToProgram}/>}
       {section==="schedule"&&<Schedule rows={schedule} add={addProgramme}/>}
       {section==="news"&&<News notify={notify}/>}
       {section==="media"&&<Media upload={upload} files={mediaFiles} selected={selectedMedia} select={selectMedia} remove={removeMedia} fileInputRef={fileInputRef} onFiles={handleFiles}/>}
@@ -71,16 +81,24 @@ export default function Home(){
   </main>;
 }
 
-function Studio({live,scene,setScene,scenes,addScene,source,setSource,playing,togglePlayback,resetPlayback,elapsed,selectedMedia}:{live:boolean;scene:string;setScene:(x:string)=>void;scenes:string[];addScene:()=>void;source:string;setSource:(x:string)=>void;playing:boolean;togglePlayback:()=>void;resetPlayback:()=>void;elapsed:string;selectedMedia:{name:string;type:string;url:string}|null}){
+function Studio({live,scene,setScene,scenes,addScene,source,setSource,playing,togglePlayback,resetPlayback,elapsed,selectedMedia,layers,programLayers,selectedLayer,setSelectedLayer,addLayer,addTextLayer,removeLayer,toggleLayer,cutToProgram}:{live:boolean;scene:string;setScene:(x:string)=>void;scenes:string[];addScene:()=>void;source:string;setSource:(x:string)=>void;playing:boolean;togglePlayback:()=>void;resetPlayback:()=>void;elapsed:string;selectedMedia:{name:string;type:string;url:string}|null;layers:Layer[];programLayers:Layer[];selectedLayer:string;setSelectedLayer:(x:string)=>void;addLayer:()=>void;addTextLayer:()=>void;removeLayer:()=>void;toggleLayer:(x:string)=>void;cutToProgram:()=>void}){
   const sources=[["📷","Camera"],["🎞","Video"],["🖼","Image"],["🔤","Text"],["🎙","Microphone"],["🌐","Browser"],["📰","Auto News"],["©","Logo"]];
-  return <div className="grid studio">
-    <div className="panel preview">
-      <div className="title"><b>PROGRAM OUTPUT</b><em>{live?"LIVE":"PREVIEW"}</em></div>
-      <div className="screen">{selectedMedia&&source==="Video"&&selectedMedia.type.startsWith("video/")?<video src={selectedMedia.url} controls={false} autoPlay={playing} muted playsInline/>:selectedMedia&&source==="Image"&&selectedMedia.type.startsWith("image/")?<img src={selectedMedia.url} alt={selectedMedia.name}/>:selectedMedia&&source==="Microphone"&&selectedMedia.type.startsWith("audio/")?<div className="mediaAudio"><strong>🎵 {selectedMedia.name}</strong><audio src={selectedMedia.url} controls autoPlay={playing}/></div>:<><strong>DIGITAL TELEVISION</strong><span>{live?scene.toUpperCase():"READY TO BROADCAST"}</span><small>{source} • {playing?"PLAYING":"PAUSED"}{selectedMedia?` • ${selectedMedia.name}`:""}</small></>}</div>
-      <div className="transport"><button onClick={togglePlayback}>{playing?"Ⅱ":"▶"}</button><button onClick={resetPlayback}>⏹</button><label>{elapsed}</label></div>
+  const renderLayer=(l:Layer)=><div className={"canvasLayer kind-"+l.kind.toLowerCase()} key={l.id}>
+    {l.kind==="Image"&&l.url?<img src={l.url} alt={l.name}/>:l.kind==="Video"&&l.url?<video src={l.url} autoPlay={playing} muted loop playsInline/>:l.kind==="Audio"&&l.url?<audio src={l.url} autoPlay={playing} controls/>:l.kind==="Text"?<strong>{l.name}</strong>:<span>{l.kind==="Camera"?"LIVE CAMERA":l.name}</span>}
+  </div>;
+  const renderCanvas=(items:Layer[],label:string)=><div className="canvasWrap"><div className="canvasLabel">{label}</div><div className="canvas">{items.filter(x=>x.visible).map(renderLayer)}{items.length===0&&<span className="canvasEmpty">NO SOURCES</span>}</div></div>;
+  return <div className="studioObs">
+    <div className="obsTop">
+      {renderCanvas(layers,"PREVIEW")}
+      <div className="transition"><button onClick={cutToProgram}>CUT →</button><small>Send Preview to Program</small></div>
+      {renderCanvas(programLayers,"PROGRAM")}
     </div>
-    <div className="panel"><div className="title"><b>SCENES</b><button onClick={addScene}>＋ New Scene</button></div>{scenes.map(s=><button key={s} onClick={()=>setScene(s)} className={"scene "+(scene===s?"selected":"")}>▣ {s}<small>{scene===s?"ACTIVE":"SELECT"}</small></button>)}</div>
-    <div className="panel"><div className="title"><b>SOURCES</b><em>{source.toUpperCase()}</em></div><div className="sourceGrid">{sources.map(([icon,name])=><button className={source===name?"sourceSelected":""} onClick={()=>setSource(name)} key={name}>{icon} {name}</button>)}</div></div>
+    <div className="obsGrid">
+      <div className="panel"><div className="title"><b>SCENES</b><button onClick={addScene}>＋ New Scene</button></div>{scenes.map(s=><button key={s} onClick={()=>setScene(s)} className={"scene "+(scene===s?"selected":"")}>▣ {s}<small>{scene===s?"ACTIVE":"SELECT"}</small></button>)}</div>
+      <div className="panel"><div className="title"><b>SOURCES</b><em>{source.toUpperCase()}</em></div><div className="sourceGrid">{sources.map(([icon,name])=><button className={source===name?"sourceSelected":""} onClick={()=>setSource(name)} key={name}>{icon} {name}</button>)}</div><div className="layerActions"><button onClick={addLayer}>＋ Add as Layer</button><button onClick={addTextLayer}>＋ Text Layer</button></div></div>
+      <div className="panel"><div className="title"><b>SOURCES / LAYERS</b><em>{layers.length} LAYERS</em></div><div className="layerList">{layers.map(l=><div className={"layerRow "+(selectedLayer===l.id?"selected":"")} key={l.id} onClick={()=>setSelectedLayer(l.id)}><button className="eye" onClick={e=>{e.stopPropagation();toggleLayer(l.id)}}>{l.visible?"◉":"○"}</button><span>☷</span><b>{l.name}</b><small>{l.kind}</small></div>)}</div><button className="removeLayer" onClick={removeLayer}>Remove Selected Layer</button></div>
+      <div className="panel"><div className="title"><b>PLAYBACK</b><em>{source.toUpperCase()}</em></div><div className="transport"><button onClick={togglePlayback}>{playing?"Ⅱ":"▶"}</button><button onClick={resetPlayback}>⏹</button><label>{elapsed}</label></div><div className="health"><span>Program</span><b>{live?"LIVE":"PREVIEW"}</b></div></div>
+    </div>
     <div className="panel"><div className="title"><b>BROADCAST HEALTH</b></div>{[["Connection",live?"Stable":"Standby"],["Bitrate",live?"4.8 Mbps":"0 Mbps"],["Dropped Frames","0.00%"],["Watchdog","Active"]].map(x=><div className="health" key={x[0]}><span>{x[0]}</span><b>{x[1]}</b></div>)}</div>
   </div>
 }

@@ -288,7 +288,7 @@ export default function Home(){
       {section==="news"&&<News notify={notify}/>}
       {section==="media"&&<Media files={mediaFiles} selected={previewMediaId} select={selectMedia} remove={removeMedia} upload={()=>fileInputRef.current?.click()}/>}
       {section==="streaming"&&<Streaming connected={connected} setConnected={setConnected} live={live}/>}
-      {section==="analytics"&&<Analytics live={live} program={programMedia}/>}
+      {section==="analytics"&&<Analytics live={live} program={programMedia} streamStartedAt={streamStartedAt} totalViews={totalViews} peakViewers={peakViewers} connected={connected}/>}
       {section==="settings"&&<Settings notify={notify}/>}
     </section>
 

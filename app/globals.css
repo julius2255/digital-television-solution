@@ -131,3 +131,17 @@
 .editorHint{font-size:8px!important;line-height:1.5!important}
 .editorComposition .compositionLayer.selected{outline:2px solid #1682ff!important;outline-offset:-1px}
 .editorComposition .compositionLayer.selected:after{content:"";position:absolute;inset:0;border:1px dashed rgba(255,255,255,.8);pointer-events:none}
+
+
+/* Playlist run-order controls */
+.playlistRunHead{display:grid;grid-template-columns:55px 30px minmax(0,1fr) 70px 260px;gap:7px;padding:7px 9px;color:#68758a;font-size:7px;font-weight:900;text-transform:uppercase;border-bottom:1px solid #202837}
+.playlistRunHead span:nth-child(4){text-align:right}
+.playlistAvailable{margin-top:12px;padding-top:10px;border-top:1px solid #202837}
+.playlistAvailable .title{margin-bottom:6px}
+.playlistAvailableRow{display:grid;grid-template-columns:24px minmax(0,1fr) 65px auto auto auto;align-items:center;gap:7px;background:#101722;border:1px solid #202837;padding:7px 9px;border-radius:5px;margin:4px 0;font-size:8px}
+.playlistAvailableRow b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.playlistAvailableRow small{color:#69758a}
+.playlistAvailableRow button{background:#18202c;border:1px solid #293143;padding:6px 8px;border-radius:4px;font-size:7px}
+.playlistAvailableRow button:hover{border-color:#1682ff}
+.playlistRow button:disabled{opacity:.3;cursor:not-allowed}
+@media(max-width:850px){.playlistRunHead{display:none}.playlistAvailableRow{grid-template-columns:24px 1fr auto}.playlistAvailableRow small{display:none}.playlistAvailableRow button:nth-last-child(2){display:none}.playlistRow{grid-template-columns:25px 20px 1fr auto}.playlistRow button{padding:5px}.playlistRow small{display:none}}

@@ -525,7 +525,7 @@ function News({notify}:{notify:(x:string)=>void}){
       <button onClick={stopVoice}>■ Stop Voice</button>
       <button onClick={async()=>{setLoading(true);try{const r=await fetch("/api/news",{cache:"no-store"});const j=await r.json();setItems(j.items||[]);setSelected(0);notify("Loaded "+(j.items||[]).length+" headlines")}catch{notify("News refresh failed")}finally{setLoading(false)}}}>↻ Refresh Now</button>
     </div>
-  </div></div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>
+  </div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>
     {["TUKO NEWS","STANDARD MEDIA","GDELT / GLOBAL","Custom RSS / API"].map(s=><div className="health" key={s}><span>{s}</span><b>{source===s?"ACTIVE":"Ready"}</b></div>)}
     <div className="panel" style={{marginTop:12}}><div className="title"><b>VOICE ENGINE</b><em>{speaking?"SPEAKING":"READY"}</em></div><p className="muted">Browser text-to-speech is active for newsroom testing and preview. It uses the device voice and follows AUTO VOICE.</p></div>
   </div></div>

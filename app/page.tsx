@@ -5,7 +5,7 @@ type Section="studio"|"playlist"|"schedule"|"news"|"media"|"streaming"|"analytic
 type MediaFile={id:string;name:string;type:string;url:string;size:number};
 type Scene={id:string;name:string};
 type Source={id:string;name:string;kind:string;mediaId?:string;url?:string;visible:boolean};
-type StudioLayer={id:string;name:string;kind:"video"|"image"|"text";mediaId?:string;text?:string;x:number;y:number;width:number;height:number;rotation:number;opacity:number;zoom:number;cropTop:number;cropRight:number;cropBottom:number;cropLeft:number;visible:boolean;locked:boolean;};
+type StudioLayer={id:string;name:string;kind:"video"|"image"|"text";mediaId?:string;text?:string;x:number;y:number;width:number;height:number;rotation:number;opacity:number;zoom:number;cropTop:number;cropRight:number;cropBottom:number;cropLeft:number;visible:boolean;locked:boolean;role?:"channel-logo"|"show-logo";};
 const youtubeEmbedUrl=(value:string)=>{
   try{
     const u=new URL(value);
@@ -70,6 +70,9 @@ export default function Home(){
   const [volume,setVolume]=useState(1);
   const [muted,setMuted]=useState(false);
   const [transition,setTransition]=useState<"cut"|"fade">("cut");
+  const [fadeSpeed,setFadeSpeed]=useState(800);
+  const [channelLogoId,setChannelLogoId]=useState("");
+  const [showLogoMap,setShowLogoMap]=useState<Record<string,string>>({});
   const [toast,setToast]=useState("");
   const [connected,setConnected]=useState<Record<string,boolean>>({YouTube:false,Facebook:false,TikTok:false,"Custom RTMP":false});
   const [schedule,setSchedule]=useState<string[][]>(seedSchedule);
@@ -78,9 +81,20 @@ export default function Home(){
   const lastAutoSlotRef=useRef("");
   const fileInputRef=useRef<HTMLInputElement>(null);
 
-  useEffect(()=>{try{const s=localStorage.getItem("dtv-schedule");if(s)setSchedule(JSON.parse(s));const a=localStorage.getItem("dtv-auto-schedule");if(a!==null)setAutoSchedule(a==="true");const pl=localStorage.getItem("dtv-playlist");if(pl)setPlaylistIds(JSON.parse(pl))}catch{}},[]);
-  useEffect(()=>{try{localStorage.setItem("dtv-schedule",JSON.stringify(schedule));localStorage.setItem("dtv-auto-schedule",String(autoSchedule));localStorage.setItem("dtv-playlist",JSON.stringify(playlistIds))}catch{}},[schedule,autoSchedule,playlistIds]);
+  useEffect(()=>{try{const s=localStorage.getItem("dtv-schedule");if(s)setSchedule(JSON.parse(s));const a=localStorage.getItem("dtv-auto-schedule");if(a!==null)setAutoSchedule(a==="true");const pl=localStorage.getItem("dtv-playlist");if(pl)setPlaylistIds(JSON.parse(pl));const fs=localStorage.getItem("dtv-fade-speed");if(fs)setFadeSpeed(Number(fs));const cl=localStorage.getItem("dtv-channel-logo");if(cl)setChannelLogoId(cl);const sl=localStorage.getItem("dtv-show-logos");if(sl)setShowLogoMap(JSON.parse(sl))}catch{}},[]);
+  useEffect(()=>{try{localStorage.setItem("dtv-schedule",JSON.stringify(schedule));localStorage.setItem("dtv-auto-schedule",String(autoSchedule));localStorage.setItem("dtv-playlist",JSON.stringify(playlistIds));localStorage.setItem("dtv-fade-speed",String(fadeSpeed));localStorage.setItem("dtv-channel-logo",channelLogoId);localStorage.setItem("dtv-show-logos",JSON.stringify(showLogoMap))}catch{}},[schedule,autoSchedule,playlistIds,fadeSpeed,channelLogoId,showLogoMap]);
   useEffect(()=>{const tick=()=>{const d=new Date();const t=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");setScheduleClock(t)};tick();const id=window.setInterval(tick,15000);return()=>window.clearInterval(id)},[]);
+
+  const buildBroadcastLayers=(media:MediaFile,showName?:string)=>{
+    const base:StudioLayer={id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false};
+    const logos:StudioLayer[]=[];
+    const channel=channelLogoId?mediaFiles.find(f=>f.id===channelLogoId):null;
+    if(channel)logos.push({id:"channel-logo",name:"Channel Logo",kind:"image",mediaId:channel.id,x:3,y:3,width:15,height:15,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:true,role:"channel-logo"});
+    const showId=showName?showLogoMap[showName]:"";
+    const show=showId?mediaFiles.find(f=>f.id===showId):null;
+    if(show)logos.push({id:"show-logo",name:"Show Logo",kind:"image",mediaId:show.id,x:82,y:4,width:15,height:15,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:true,role:"show-logo"});
+    return [base,...logos];
+  };
 
   useEffect(()=>{
     if(!autoSchedule||!scheduleClock||!mediaFiles.length)return;
@@ -91,11 +105,11 @@ export default function Home(){
     lastAutoSlotRef.current=scheduleClock;
     setPreviewMediaId(media.id);
     setPreviewWebUrl("");
-    setPreviewLayers(prev=>[{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false},...prev.filter(x=>x.id!=="base")]);
-    setPreviewPlaying(true);
+    setPreviewLayers(buildBroadcastLayers(media,row[1]));
+    setPreviewPlaying(false);
     setProgramMediaId(media.id);
     setProgramWebUrl("");
-    setProgramLayers([{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false}]);
+    setProgramLayers(buildBroadcastLayers(media,row[1]));
     setProgramPlaying(true);
     setProgramTime(0);
     setActiveSource("media");
@@ -164,7 +178,7 @@ export default function Home(){
     setSources(v=>[...v,source]);setActiveSource(source.id);setPreviewMediaId("");setPreviewWebUrl(embed||raw);setPreviewPlaying(false);notify(embed?"YouTube video loaded into Preview":"Web page loaded into Preview");
   };
 
-  const take=(mode:"cut"|"fade"=transition,time=0)=>{
+  const take=(mode:"cut"|"fade"=transition,time=previewClock)=>{
     if(!previewMedia&&!previewWebUrl&&previewLayers.length===0){
       notify("Build a Preview composition first");
       return;
@@ -203,7 +217,7 @@ export default function Home(){
   const movePlaylist=(id:string,dir:number)=>setPlaylistIds(v=>{const i=v.indexOf(id),j=i+dir;if(i<0||j<0||j>=v.length)return v;const a=[...v];[a[i],a[j]]=[a[j],a[i]];return a});
   const removeFromPlaylist=(id:string)=>setPlaylistIds(v=>v.filter(x=>x!==id));
   const addToPlaylist=(id:string)=>setPlaylistIds(v=>v.includes(id)?v:[...v,id]);
-  const playPlaylistItem=(id:string)=>{const file=mediaFiles.find(x=>x.id===id);if(!file)return;setPreviewMediaId(id);setPreviewWebUrl("");setPreviewTime(0);setPreviewPlaying(true);setProgramMediaId(id);setProgramWebUrl("");setProgramTime(0);setProgramPlaying(true);setProgramLayers([{id:"base",name:file.name,kind:file.type.startsWith("image/")?"image":"video",mediaId:id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false}]);setPreviewLayers([{id:"base",name:file.name,kind:file.type.startsWith("image/")?"image":"video",mediaId:id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false}]);notify("RUN ORDER: "+file.name)};
+  const playPlaylistItem=(id:string)=>{const file=mediaFiles.find(x=>x.id===id);if(!file)return;setPreviewMediaId(id);setPreviewWebUrl("");setPreviewTime(0);setPreviewPlaying(false);setProgramMediaId(id);setProgramWebUrl("");setProgramTime(0);setProgramPlaying(true);const layers=buildBroadcastLayers(file);setProgramLayers(layers);setPreviewLayers(layers.map(x=>({...x})));notify("RUN ORDER: "+file.name)};
   const playNextPlaylistItem=(currentId:string)=>{const i=playlistIds.indexOf(currentId);const nextId=playlistIds[i+1];if(nextId){playPlaylistItem(nextId);return true}return false};
 
   const playScheduled=(row:string[])=>{
@@ -213,12 +227,12 @@ export default function Home(){
     if(!media){notify("Scheduled media is not available");return;}
     setPreviewMediaId(media.id);
     setPreviewWebUrl("");
-    setPreviewLayers(prev=>[{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false},...prev.filter(x=>x.id!=="base")]);
-    setPreviewPlaying(true);
+    setPreviewLayers(buildBroadcastLayers(media,row[1]));
+    setPreviewPlaying(false);
     setPreviewTime(0);
     setProgramMediaId(media.id);
     setProgramWebUrl("");
-    setProgramLayers([{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false}]);
+    setProgramLayers(buildBroadcastLayers(media,row[1]));
     setProgramPlaying(true);
     setProgramTime(0);
     setActiveSource("media");
@@ -246,7 +260,7 @@ export default function Home(){
     <section className="workspace">
       {section==="studio"&&<Studio
         preview={previewMedia} program={programMedia} previewWebUrl={previewWebUrl} programWebUrl={programWebUrl} previewPlaying={previewPlaying} programPlaying={programPlaying}
-        previewTime={previewTime} programTime={programTime} volume={volume} muted={muted}
+        previewTime={previewTime} programTime={programTime} volume={volume} muted={muted} fadeSpeed={fadeSpeed} setFadeSpeed={setFadeSpeed} channelLogoId={channelLogoId} setChannelLogoId={setChannelLogoId} showLogoMap={showLogoMap} setShowLogoMap={setShowLogoMap}
         previewLayers={previewLayers} setPreviewLayers={setPreviewLayers} programLayers={programLayers}
         setVolume={setVolume} setMuted={setMuted} togglePreview={togglePreview} stopPreview={stopPreview}
         toggleProgram={toggleProgram} take={take} transition={transition} setTransition={setTransition} live={live} toggleLive={toggleLive}
@@ -256,7 +270,7 @@ export default function Home(){
         mediaFiles={mediaFiles} selectMedia={selectMedia} playMedia={playMedia} selectWeb={(url)=>{setPreviewMediaId("");setPreviewWebUrl(url);setPreviewPlaying(false);notify("Web page loaded into Preview")}} upload={()=>fileInputRef.current?.click()}
       />}
       {section==="playlist"&&<Playlist mediaFiles={mediaFiles} playlistIds={playlistIds} previewMediaId={previewMediaId} selectMedia={selectMedia} playMedia={playMedia} remove={removeMedia} move={movePlaylist} removeFromPlaylist={removeFromPlaylist} addToPlaylist={addToPlaylist} playNow={playPlaylistItem} upload={()=>fileInputRef.current?.click()}/>}
-      {section==="schedule"&&<Schedule rows={schedule} now={scheduleClock} auto={autoSchedule} setAuto={setAutoSchedule} setRows={setSchedule} add={addProgramme} mediaFiles={mediaFiles} playNow={playScheduled}/>} 
+      {section==="schedule"&&<Schedule rows={schedule} now={scheduleClock} auto={autoSchedule} setAuto={setAutoSchedule} setRows={setSchedule} add={addProgramme} mediaFiles={mediaFiles} playNow={playScheduled} showLogoMap={showLogoMap} setShowLogoMap={setShowLogoMap} imageFiles={mediaFiles.filter(f=>f.type.startsWith("image/"))}/>} 
       {section==="news"&&<News notify={notify}/>}
       {section==="media"&&<Media files={mediaFiles} selected={previewMediaId} select={selectMedia} remove={removeMedia} upload={()=>fileInputRef.current?.click()}/>}
       {section==="streaming"&&<Streaming connected={connected} setConnected={setConnected} live={live}/>}
@@ -271,7 +285,7 @@ export default function Home(){
 
 function Studio(p:{
   preview:MediaFile|null;program:MediaFile|null;previewWebUrl:string;programWebUrl:string;previewPlaying:boolean;programPlaying:boolean;
-  previewTime:number;programTime:number;volume:number;muted:boolean;
+  previewTime:number;programTime:number;volume:number;muted:boolean;fadeSpeed:number;setFadeSpeed:(v:number)=>void;channelLogoId:string;setChannelLogoId:(v:string)=>void;showLogoMap:Record<string,string>;setShowLogoMap:(v:Record<string,string>)=>void;
   previewLayers:StudioLayer[];setPreviewLayers:(v:StudioLayer[]|((v:StudioLayer[])=>StudioLayer[]))=>void;programLayers:StudioLayer[];
   setVolume:(v:number)=>void;setMuted:(v:boolean)=>void;togglePreview:()=>void;stopPreview:()=>void;toggleProgram:()=>void;
   take:(mode?:"cut"|"fade",time?:number)=>void;transition:"cut"|"fade";setTransition:(v:"cut"|"fade")=>void;
@@ -329,7 +343,7 @@ function Studio(p:{
   const updateLayer=(id:string,patch:Partial<StudioLayer>)=>p.setPreviewLayers(v=>v.map(l=>l.id===id?{...l,...patch}:l));
   const selected=p.previewLayers.find(x=>x.id===selectedLayerId)||null;
   const reorder=(id:string,dir:number)=>p.setPreviewLayers(v=>{const i=v.findIndex(x=>x.id===id),j=i+dir;if(i<0||j<0||j>=v.length)return v;const a=[...v];[a[i],a[j]]=[a[j],a[i]];return a});
-  const removeLayer=(id:string)=>{if(id==="base")return;p.setPreviewLayers(v=>v.filter(x=>x.id!==id));setSelectedLayerId("")};
+  const removeLayer=(id:string)=>{const layer=p.previewLayers.find(x=>x.id===id);if(id==="base"||layer?.role==="channel-logo"||layer?.role==="show-logo")return;p.setPreviewLayers(v=>v.filter(x=>x.id!==id));setSelectedLayerId("")};
   const duplicateLayer=(id:string)=>{const l=p.previewLayers.find(x=>x.id===id);if(!l)return;const copy={...l,id:String(Date.now())+"-copy",name:l.name+" Copy",x:Math.min(100-l.width,l.x+3),y:Math.min(100-l.height,l.y+3)};p.setPreviewLayers(v=>[...v,copy]);setSelectedLayerId(copy.id)};
   const beginDrag=(e:React.PointerEvent,id:string,mode:"move"|"resize")=>{e.stopPropagation();const l=p.previewLayers.find(x=>x.id===id);if(!l||l.locked)return;const actualMode=(cropMode||e.altKey||e.metaKey)&&l.id!=="base"?"crop":mode;dragRef.current={id,mode:actualMode,startX:e.clientX,startY:e.clientY,x:l.x,y:l.y,width:l.width,height:l.height,cropTop:l.cropTop,cropRight:l.cropRight,cropBottom:l.cropBottom,cropLeft:l.cropLeft};setSelectedLayerId(id)};
   const beginHandle=(e:React.PointerEvent,id:string,handle:string)=>{
@@ -370,7 +384,7 @@ function Studio(p:{
     if(!media)return <div key={l.id} {...common}><span className="missingLayer">Media missing</span></div>;
     const node=l.kind==="image"?<img style={mediaStyle} src={media.url} alt={media.name}/>:<video style={mediaStyle}
       ref={l.id==="base"?(program?programRef:previewRef):undefined}
-      src={media.url} muted={p.muted} autoPlay={program?p.programPlaying:p.previewPlaying} loop={l.id!=="base"} playsInline preload="auto"
+      src={media.url} muted={!program||l.id!=="base"||p.muted} autoPlay={program?p.programPlaying:p.previewPlaying} loop={l.id!=="base"} playsInline preload="auto"
       onTimeUpdate={l.id==="base"?(e=>{if(program)setProgramClock(e.currentTarget.currentTime);else setPreviewClock(e.currentTarget.currentTime)}):undefined}
       onLoadedMetadata={l.id==="base"?(e=>{e.currentTarget.currentTime=program?p.programTime:p.previewTime}):undefined}
       onEnded={l.id==="base"?(e=>{if(program)p.onProgramEnded?.();else p.stopPreview()}):undefined}
@@ -381,7 +395,7 @@ function Studio(p:{
   const composition=(program:boolean)=>{
     const layers=program?p.programLayers:p.previewLayers;
     const base=layers.find(x=>x.id==="base");
-    return <div className={"composition "+(program&&fadePulse?"programFade":"")} ref={!program?editorRef:null}>
+    return <div className={"composition "+(program&&fadePulse?"programFade":"")} style={program?{"--fade-duration":p.fadeSpeed+"ms"} as React.CSSProperties:undefined} ref={!program?editorRef:null}>
       {!base&&!program&&p.previewWebUrl&&<iframe ref={previewWebRef} className="compositionWeb" src={p.previewWebUrl} title="Preview Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
       {!base&&program&&p.programWebUrl&&<iframe ref={programWebRef} className="compositionWeb" src={p.programWebUrl} title="Program Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
       {layers.map(l=>renderLayer(l,program))}
@@ -398,16 +412,16 @@ function Studio(p:{
 
   return <div className="studioSimple">
     <div className="studioTitle"><div><small>PRODUCTION CONTROL ROOM</small><h1>Studio</h1></div><div className="studioActions"><button onClick={p.togglePreview}>{p.previewPlaying?"Ⅱ PAUSE PREVIEW":"▶ PLAY PREVIEW"}</button><button onClick={p.stopPreview}>■ STOP PREVIEW</button><button className={p.live?"danger take":"take"} onClick={p.toggleLive}>{p.live?"■ STOP LIVE":"● GO LIVE"}</button></div></div>
-    <div className="obsTopSimple">{screen(false)}<div className="takeColumn"><button className="cutButton" onClick={()=>{p.setTransition("cut");p.take()}}>CUT</button><button className="fadeButton" onClick={()=>{p.setTransition("fade");setFadePulse(true);setTimeout(()=>setFadePulse(false),500);p.take()}}>FADE</button><select value={p.transition} onChange={e=>p.setTransition(e.target.value as "cut"|"fade")}><option value="cut">Cut</option><option value="fade">Fade</option></select><small>Full Preview → Program</small></div>{screen(true)}</div>
+    <div className="obsTopSimple">{screen(false)}<div className="takeColumn"><button className="cutButton" onClick={()=>{p.setTransition("cut");p.take("cut",previewClock)}}>CUT</button><button className="fadeButton" onClick={()=>{p.setTransition("fade");setFadePulse(true);setTimeout(()=>setFadePulse(false),p.fadeSpeed);p.take("fade",previewClock)}}>FADE</button><select value={p.transition} onChange={e=>p.setTransition(e.target.value as "cut"|"fade")}><option value="cut">Cut</option><option value="fade">Fade</option></select><small>Full Preview → Program</small></div>{screen(true)}</div>
 
     <div className="studioEditor">
-      <div className="editorCanvasPanel panel"><div className="title"><b>PREVIEW EDITOR</b><em>DRAG • RESIZE • LAYER</em></div><div className="editorHint">OBS-style canvas: drag a layer to move it • drag any blue handle to resize/zoom • Ctrl/Cmd + wheel to zoom • Alt/Option-drag to crop • use 👁 to show/hide and 🗑 to delete.</div><div className="editorToolbar"><button onClick={()=>setCropMode(v=>!v)} className={cropMode?"active":""}>✂ {cropMode?"CROP MODE":"TRANSFORM"}</button><button onClick={()=>selected&&updateLayer(selected.id,{zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,rotation:0})}>RESET</button><button onClick={()=>selected&&updateLayer(selected.id,{x:0,y:0,width:100,height:100})}>FIT</button><button onClick={()=>selected&&updateLayer(selected.id,{x:5,y:5,width:90,height:90})}>FILL</button><label>CANVAS ZOOM <input type="range" min="60" max="160" value={canvasZoom} onChange={e=>setCanvasZoom(Number(e.target.value))}/><b>{canvasZoom}%</b></label></div>
+      <div className="editorCanvasPanel panel"><div className="title"><b>PREVIEW EDITOR</b><em>DRAG • RESIZE • LAYER</em></div><div className="editorHint">OBS-style canvas: drag a layer to move it • drag any blue handle to resize/zoom • Ctrl/Cmd + wheel to zoom • Alt/Option-drag to crop • use 👁 to show/hide and 🗑 to delete.</div><div className="editorToolbar"><button onClick={()=>setCropMode(v=>!v)} className={cropMode?"active":""}>✂ {cropMode?"CROP MODE":"TRANSFORM"}</button><button onClick={()=>selected&&updateLayer(selected.id,{zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,rotation:0})}>RESET</button><button onClick={()=>selected&&updateLayer(selected.id,{x:0,y:0,width:100,height:100})}>FIT</button><button onClick={()=>selected&&updateLayer(selected.id,{x:5,y:5,width:90,height:90})}>FILL</button><label>CANVAS ZOOM <input type="range" min="60" max="160" value={canvasZoom} onChange={e=>setCanvasZoom(Number(e.target.value))}/><b>{canvasZoom}%</b></label><label>FADE <input type="range" min="200" max="3000" step="100" value={p.fadeSpeed} onChange={e=>p.setFadeSpeed(Number(e.target.value))}/><b>{(p.fadeSpeed/1000).toFixed(1)}s</b></label></div>
         <div className="editorCanvas" style={{padding:"8px",overflow:"auto"}}><div className="editorZoomViewport" style={{width:canvasZoom+"%",margin:"0 auto"}}><div className="composition editorComposition" ref={editorRef}>{!p.previewLayers.some(x=>x.id==="base")&&!p.previewWebUrl&&<span className="screenEmpty">SELECT MEDIA TO START</span>}{!p.previewLayers.some(x=>x.id==="base")&&p.previewWebUrl&&<iframe className="compositionWeb" src={p.previewWebUrl} title="Editor Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}{p.previewLayers.map(l=>renderLayer(l,false))}</div></div></div>
       </div>
       <div className="editorSide panel">
         <div className="title"><b>LAYERS</b><em>{p.previewLayers.length} LAYERS</em></div>
-        <div className="editorLayerList">{[...p.previewLayers].reverse().map(l=><div key={l.id} className={"editorLayerRow "+(selectedLayerId===l.id?"selected":"")} onClick={()=>setSelectedLayerId(l.id)}><button className="layerEye" title={l.visible?"Hide layer":"Show layer"} aria-label={l.visible?"Hide layer":"Show layer"} onClick={e=>{e.stopPropagation();updateLayer(l.id,{visible:!l.visible})}}>{l.visible?"👁":"○"}</button><span>{l.kind==="text"?"T":l.kind==="image"?"▧":"▶"}</span><b title={l.name}>{l.name}</b><small>{l.kind}</small><button className="layerLock" title={l.locked?"Unlock layer":"Lock layer"} aria-label={l.locked?"Unlock layer":"Lock layer"} onClick={e=>{e.stopPropagation();updateLayer(l.id,{locked:!l.locked})}}>{l.locked?"🔒":"🔓"}</button><button className="layerDelete" title={l.id==="base"?"Base layer cannot be deleted":"Delete layer"} aria-label="Delete layer" disabled={l.id==="base"} onClick={e=>{e.stopPropagation();removeLayer(l.id)}}>🗑</button></div>)}</div>
-        <div className="editorButtons"><button onClick={()=>{const f=p.mediaFiles.find(x=>x.type.startsWith("image/"));if(f)addLayer("image",f);else p.upload()}}>＋ Logo / Image</button><button onClick={()=>{const f=p.mediaFiles.find(x=>x.type.startsWith("video/"));if(f)addLayer("video",f);else p.upload()}}>＋ Video Layer</button><button onClick={()=>addLayer("text")}>＋ Text / Lower Third</button></div>
+        <div className="editorLayerList">{[...p.previewLayers].reverse().map(l=><div key={l.id} className={"editorLayerRow "+(selectedLayerId===l.id?"selected":"")} onClick={()=>setSelectedLayerId(l.id)}><button className="layerEye" title={l.visible?"Hide layer":"Show layer"} aria-label={l.visible?"Hide layer":"Show layer"} onClick={e=>{e.stopPropagation();updateLayer(l.id,{visible:!l.visible})}}>{l.visible?"👁":"○"}</button><span>{l.kind==="text"?"T":l.kind==="image"?"▧":"▶"}</span><b title={l.name}>{l.name}</b><small>{l.kind}</small><button className="layerLock" title={l.locked?"Unlock layer":"Lock layer"} aria-label={l.locked?"Unlock layer":"Lock layer"} onClick={e=>{e.stopPropagation();updateLayer(l.id,{locked:!l.locked})}}>{l.locked?"🔒":"🔓"}</button><button className="layerDelete" title={l.id==="base"||!!l.role?"Persistent broadcast layer cannot be deleted":"Delete layer"} aria-label="Delete layer" disabled={l.id==="base"||!!l.role} onClick={e=>{e.stopPropagation();removeLayer(l.id)}}>🗑</button></div>)}</div>
+        <div className="editorButtons"><button onClick={()=>{const f=p.mediaFiles.find(x=>x.type.startsWith("image/"));if(f)addLayer("image",f);else p.upload()}}>＋ Logo / Image</button><button onClick={()=>{const f=p.mediaFiles.find(x=>x.type.startsWith("video/"));if(f)addLayer("video",f);else p.upload()}}>＋ Video Layer</button><button onClick={()=>{const f=p.mediaFiles.find(x=>x.id===p.channelLogoId)||p.mediaFiles.find(x=>x.type.startsWith("image/"));if(f){const layer:StudioLayer={id:"channel-logo",name:"Channel Logo",kind:"image",mediaId:f.id,x:3,y:3,width:15,height:15,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:true,role:"channel-logo"};p.setPreviewLayers(v=>[...v.filter(x=>x.role!=="channel-logo"),layer]);p.setChannelLogoId(f.id);setSelectedLayerId(layer.id)}}}>＋ Channel Logo</button><button onClick={()=>{const f=p.mediaFiles.find(x=>x.type.startsWith("image/"));if(f){const layer:StudioLayer={id:"show-logo",name:"Show Logo",kind:"image",mediaId:f.id,x:82,y:4,width:15,height:15,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:true,role:"show-logo"};p.setPreviewLayers(v=>[...v.filter(x=>x.role!=="show-logo"),layer]);setSelectedLayerId(layer.id)}}}}>＋ Show Logo</button><button onClick={()=>addLayer("text")}>＋ Text / Lower Third</button></div>
         {selected&&<div className="properties"><div className="propTitle">SELECTED: {selected.name}</div><label>X <input type="number" min="0" max="100" value={Math.round(selected.x)} onChange={e=>updateLayer(selected.id,{x:Number(e.target.value)})}/></label><label>Y <input type="number" min="0" max="100" value={Math.round(selected.y)} onChange={e=>updateLayer(selected.id,{y:Number(e.target.value)})}/></label><label>W <input type="number" min="5" max="100" value={Math.round(selected.width)} onChange={e=>updateLayer(selected.id,{width:Number(e.target.value)})}/></label><label>H <input type="number" min="5" max="100" value={Math.round(selected.height)} onChange={e=>updateLayer(selected.id,{height:Number(e.target.value)})}/></label><label>Opacity <input type="range" min="0.1" max="1" step=".05" value={selected.opacity} onChange={e=>updateLayer(selected.id,{opacity:Number(e.target.value)})}/></label><label>Zoom <input type="range" min="0.5" max="3" step=".05" value={selected.zoom} onChange={e=>updateLayer(selected.id,{zoom:Number(e.target.value)})}/></label><label>Crop Top <input type="number" min="0" max="80" value={selected.cropTop} onChange={e=>updateLayer(selected.id,{cropTop:Number(e.target.value)})}/></label><label>Crop Right <input type="number" min="0" max="80" value={selected.cropRight} onChange={e=>updateLayer(selected.id,{cropRight:Number(e.target.value)})}/></label><label>Crop Bottom <input type="number" min="0" max="80" value={selected.cropBottom} onChange={e=>updateLayer(selected.id,{cropBottom:Number(e.target.value)})}/></label><label>Crop Left <input type="number" min="0" max="80" value={selected.cropLeft} onChange={e=>updateLayer(selected.id,{cropLeft:Number(e.target.value)})}/></label><label>Rotation <input type="range" min="-180" max="180" value={selected.rotation} onChange={e=>updateLayer(selected.id,{rotation:Number(e.target.value)})}/></label>{selected.kind==="text"&&<label>Text <input value={selected.text||""} onChange={e=>updateLayer(selected.id,{text:e.target.value})}/></label>}<div className="propertyActions"><button onClick={()=>reorder(selected.id,1)}>↑ Forward</button><button onClick={()=>reorder(selected.id,-1)}>↓ Back</button><button onClick={()=>duplicateLayer(selected.id)}>Duplicate</button><button onClick={()=>updateLayer(selected.id,{locked:!selected.locked})}>{selected.locked?"Unlock":"Lock"}</button><button className="removeLayerBtn" onClick={()=>removeLayer(selected.id)}>Delete</button></div></div>}
         <div className="editorMedia"><div className="propTitle">MEDIA FOR LAYERS</div><div className="editorMediaList">{p.mediaFiles.length?p.mediaFiles.map(f=><button key={f.id} onClick={()=>addLayer(f.type.startsWith("image/")?"image":"video",f)}><span>{f.type.startsWith("image/")?"▧":"▶"}</span>{f.name}</button>):<small>No uploaded media yet.</small>}</div></div>
       </div>
@@ -442,14 +456,14 @@ function Media({files,selected,select,remove,upload}:{files:MediaFile[];selected
   </div>
 }
 
-function Schedule({rows,now,auto,setAuto,setRows,add,mediaFiles,playNow}:{rows:string[][];now:string;auto:boolean;setAuto:(v:boolean)=>void;setRows:(v:string[][])=>void;add:()=>void;mediaFiles:MediaFile[];playNow:(row:string[])=>void}){
+function Schedule({rows,now,auto,setAuto,setRows,add,mediaFiles,playNow,showLogoMap,setShowLogoMap,imageFiles}:{rows:string[][];now:string;auto:boolean;setAuto:(v:boolean)=>void;setRows:(v:string[][])=>void;add:()=>void;mediaFiles:MediaFile[];playNow:(row:string[])=>void;showLogoMap:Record<string,string>;setShowLogoMap:(v:Record<string,string>)=>void;imageFiles:MediaFile[]}){
   const update=(i:number,j:number,v:string)=>setRows(rows.map((r,ri)=>ri===i?r.map((x,ci)=>ci===j?v:x):r));
   const remove=(i:number)=>setRows(rows.filter((_,ri)=>ri!==i));
   return <div className="panel full"><div className="title"><b>WEEKLY PROGRAMME SCHEDULE</b><div className="scheduleActions"><em className={auto?"green":""}>{auto?"AUTO ON":"AUTO OFF"}</em><button onClick={()=>setAuto(!auto)}>{auto?"Disable":"Enable"} Automation</button><button onClick={add}>＋ Add Programme</button></div></div>
     <div className="scheduleStatus"><span>CONTROL CLOCK <b>{now||"--:--"}</b></span><span>{auto?"Schedule monitoring active":"Manual scheduling"}</span></div>
     <div className="table"><div className="thead"><span>TIME</span><span>PROGRAMME</span><span>SOURCE</span><span>VIDEO / MEDIA</span><span>STATUS</span><span>ACTION</span></div>
     {rows.map((r,i)=><div className={"tr "+(r[0]===now?"current":"")} key={i}><input value={r[0]||""} onChange={e=>update(i,0,e.target.value)}/><input value={r[1]||""} onChange={e=>update(i,1,e.target.value)}/><select value={r[2]||"Video"} onChange={e=>update(i,2,e.target.value)}><option>Camera</option><option>Video</option><option>Auto News</option><option>Advertisement</option><option>Movie</option><option>Web</option></select>
-    <select value={r[3]||""} onChange={e=>update(i,3,e.target.value)} disabled={!["Video","Advertisement","Movie"].includes(r[2]||"Video")}><option value="">Select video…</option>{mediaFiles.filter(f=>f.type.startsWith("video/")).map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select><em>{r[0]===now?"NOW":"Scheduled"}</em><button onClick={()=>playNow(r)} disabled={!r[3]}>▶ Play Now</button><button onClick={()=>remove(i)}>Remove</button></div>)}</div>
+    <select value={r[3]||""} onChange={e=>update(i,3,e.target.value)} disabled={!["Video","Advertisement","Movie"].includes(r[2]||"Video")}><option value="">Select video…</option>{mediaFiles.filter(f=>f.type.startsWith("video/")).map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select><select value={showLogoMap[r[1]||""]||""} onChange={e=>setShowLogoMap({...showLogoMap,[r[1]||""]:e.target.value})} title="Logo used automatically for this show"><option value="">No show logo</option>{imageFiles.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select><em>{r[0]===now?"NOW":"Scheduled"}</em><button onClick={()=>playNow(r)} disabled={!r[3]}>▶ Play Now</button><button onClick={()=>remove(i)}>Remove</button></div>)}</div>
     <p className="muted">Edit times and programme names, assign media, then enable AUTO. At the scheduled minute the selected media is sent to Program. PLAY NOW is available for immediate testing.</p>
   </div>
 }

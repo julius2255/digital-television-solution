@@ -433,3 +433,39 @@ function Playlist({mediaFiles,playlistIds,previewMediaId,selectMedia,playMedia,r
   </div>
 }
 
+
+function Media({files,selected,select,remove,upload}:{files:MediaFile[];selected:string;select:(id:string)=>void;remove:(id:string)=>void;upload:()=>void}){
+  return <div className="panel full"><div className="title"><b>MEDIA LIBRARY</b><button onClick={upload}>＋ Upload Media</button></div>
+    <div className="media">{["🎬 Videos","🖼 Images","🎵 Audio","📢 Advertisements","📁 Playlists","🎞 Movies"].map(x=><button key={x} onClick={upload}><b>{x}</b><small>{files.length} files</small></button>)}</div>
+    <div className="libraryList">{files.length===0?<div className="empty">No media uploaded yet.</div>:files.map(f=><div className={"libraryItem "+(selected===f.id?"selected":"")} key={f.id} onClick={()=>select(f.id)}><div className="thumb">{f.type.startsWith("image/")?<img src={f.url} alt=""/>:f.type.startsWith("video/")?"▶":"♫"}</div><div><b>{f.name}</b><small>{f.type} • {(f.size/1024/1024).toFixed(1)} MB</small></div><button onClick={e=>{e.stopPropagation();remove(f.id)}}>Remove</button></div>)}</div>
+    <p className="muted">Select a file to load it into Preview. It does not replace Program.</p>
+  </div>
+}
+
+function Schedule({rows,now,auto,setAuto,setRows,add,mediaFiles,playNow}:{rows:string[][];now:string;auto:boolean;setAuto:(v:boolean)=>void;setRows:(v:string[][])=>void;add:()=>void;mediaFiles:MediaFile[];playNow:(row:string[])=>void}){
+  const update=(i:number,j:number,v:string)=>setRows(rows.map((r,ri)=>ri===i?r.map((x,ci)=>ci===j?v:x):r));
+  const remove=(i:number)=>setRows(rows.filter((_,ri)=>ri!==i));
+  return <div className="panel full"><div className="title"><b>WEEKLY PROGRAMME SCHEDULE</b><div className="scheduleActions"><em className={auto?"green":""}>{auto?"AUTO ON":"AUTO OFF"}</em><button onClick={()=>setAuto(!auto)}>{auto?"Disable":"Enable"} Automation</button><button onClick={add}>＋ Add Programme</button></div></div>
+    <div className="scheduleStatus"><span>CONTROL CLOCK <b>{now||"--:--"}</b></span><span>{auto?"Schedule monitoring active":"Manual scheduling"}</span></div>
+    <div className="table"><div className="thead"><span>TIME</span><span>PROGRAMME</span><span>SOURCE</span><span>VIDEO / MEDIA</span><span>STATUS</span><span>ACTION</span></div>
+    {rows.map((r,i)=><div className={"tr "+(r[0]===now?"current":"")} key={i}><input value={r[0]||""} onChange={e=>update(i,0,e.target.value)}/><input value={r[1]||""} onChange={e=>update(i,1,e.target.value)}/><select value={r[2]||"Video"} onChange={e=>update(i,2,e.target.value)}><option>Camera</option><option>Video</option><option>Auto News</option><option>Advertisement</option><option>Movie</option><option>Web</option></select>
+    <select value={r[3]||""} onChange={e=>update(i,3,e.target.value)} disabled={!["Video","Advertisement","Movie"].includes(r[2]||"Video")}><option value="">Select video…</option>{mediaFiles.filter(f=>f.type.startsWith("video/")).map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select><em>{r[0]===now?"NOW":"Scheduled"}</em><button onClick={()=>playNow(r)} disabled={!r[3]}>▶ Play Now</button><button onClick={()=>remove(i)}>Remove</button></div>)}</div>
+    <p className="muted">Edit times and programme names, assign media, then enable AUTO. At the scheduled minute the selected media is sent to Program. PLAY NOW is available for immediate testing.</p>
+  </div>
+}
+
+function News({notify}:{notify:(x:string)=>void}){
+  return <div className="two"><div className="panel"><div className="title"><b>AUTO NEWS</b><em className="green">AUTO VOICE</em></div><div className="news"><small>COURTESY OF CONFIGURED SOURCE</small><h2>Automated broadcast news</h2><p>Approved RSS/API feeds can be collected, summarized, attributed and prepared for broadcast.</p><div className="ticker">KENYA • AFRICA • WORLD • SPORTS • BUSINESS • ENTERTAINMENT</div></div><div className="buttons"><button onClick={()=>notify("News test started")}>▶ Test News</button><button onClick={()=>notify("News source setup opened")}>＋ Add News Source</button><button onClick={()=>notify("Voice settings opened")}>⚙ Voice Settings</button></div></div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>{["TUKO NEWS","STANDARD MEDIA","GDELT / GLOBAL","Custom RSS / API"].map(s=><div className="health" key={s}><span>{s}</span><b>Ready</b></div>)}</div></div>
+}
+
+function Streaming({connected,setConnected,live}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean}){
+  return <div className="two"><div className="panel"><div className="title"><b>STREAMING OUTPUTS</b></div>{Object.keys(connected).map(x=><div className="dest" key={x}><div><b>{x}</b><small>{connected[x]?"Connected":"Not connected"}</small></div><button onClick={()=>setConnected({...connected,[x]:!connected[x]})}>{connected[x]?"Disconnect":"Connect"}</button></div>)}<button className="big" onClick={()=>alert(!live?"Start GO LIVE first":"Multi-destination broadcast started")}>GO LIVE TO ALL CONNECTED DESTINATIONS</button></div><div className="panel"><div className="title"><b>FAILSAFE</b></div><p>✓ Automatic reconnect</p><p>✓ Internet-loss detection</p><p>✓ Standby fallback</p><p>✓ Watchdog recovery</p></div></div>
+}
+
+function Analytics({live,program}:{live:boolean;program:MediaFile|null}){
+  return <div className="cards">{[["Live Viewers",live?"1":"0"],["Total Views",live?"1":"0"],["Program",program?.name||"Standby"],["Followers","0"],["Peak Viewers",live?"1":"0"],["Health",live?"Stable":"Standby"]].map(x=><div className="metric" key={x[0]}><small>{x[0]}</small><strong>{x[1]}</strong><span>Today</span></div>)}</div>
+}
+
+function Settings({notify}:{notify:(x:string)=>void}){
+  return <div className="panel full"><div className="title"><b>SYSTEM SETTINGS</b></div><div className="settings"><button onClick={()=>notify("Broadcast Engine settings opened")}>Broadcast Engine</button><button onClick={()=>notify("Cloud Media settings opened")}>Cloud Media</button><button onClick={()=>notify("Platform authentication opened")}>Platform Accounts</button><button onClick={()=>notify("Failsafe settings opened")}>Failsafe & Recovery</button></div><p className="muted">OBS-style control is separated into Preview and Program. Real platform credentials, cloud storage and Android publishing will be connected in later stages.</p></div>
+}

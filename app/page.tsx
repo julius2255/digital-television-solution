@@ -76,6 +76,9 @@ export default function Home(){
   const [showLogoMap,setShowLogoMap]=useState<Record<string,string>>({});
   const [toast,setToast]=useState("");
   const [connected,setConnected]=useState<Record<string,boolean>>({YouTube:false,Facebook:false,TikTok:false,"Custom RTMP":false});
+  const [streamStartedAt,setStreamStartedAt]=useState<number|null>(null);
+  const [totalViews,setTotalViews]=useState(0);
+  const [peakViewers,setPeakViewers]=useState(0);
   const cameraStreamRef=useRef<MediaStream|null>(null);
   const screenStreamRef=useRef<MediaStream|null>(null);
   const [cameraReady,setCameraReady]=useState(false);
@@ -494,8 +497,8 @@ function Streaming({connected,setConnected,live}:{connected:Record<string,boolea
   return <div className="two"><div className="panel"><div className="title"><b>STREAMING OUTPUTS</b></div>{Object.keys(connected).map(x=><div className="dest" key={x}><div><b>{x}</b><small>{connected[x]?"Connected":"Not connected"}</small></div><button onClick={()=>setConnected({...connected,[x]:!connected[x]})}>{connected[x]?"Disconnect":"Connect"}</button></div>)}<button className="big" onClick={()=>alert(!live?"Start GO LIVE first":"Multi-destination broadcast started")}>GO LIVE TO ALL CONNECTED DESTINATIONS</button></div><div className="panel"><div className="title"><b>FAILSAFE</b></div><p>✓ Automatic reconnect</p><p>✓ Internet-loss detection</p><p>✓ Standby fallback</p><p>✓ Watchdog recovery</p></div></div>
 }
 
-function Analytics({live,program}:{live:boolean;program:MediaFile|null}){
-  return <div className="cards">{[["Live Viewers",live?"1":"0"],["Total Views",live?"1":"0"],["Program",program?.name||"Standby"],["Followers","0"],["Peak Viewers",live?"1":"0"],["Health",live?"Stable":"Standby"]].map(x=><div className="metric" key={x[0]}><small>{x[0]}</small><strong>{x[1]}</strong><span>Today</span></div>)}</div>
+function Analytics({live,program,streamStartedAt,totalViews,peakViewers,connected}:{live:boolean;program:MediaFile|null;streamStartedAt:number|null;totalViews:number;peakViewers:number;connected:Record<string,boolean>}){
+  const duration=streamStartedAt?Math.max(0,Math.floor((Date.now()-streamStartedAt)/1000)):0;const fmt=(s:number)=>String(Math.floor(s/3600)).padStart(2,"0")+":"+String(Math.floor(s%3600/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");const outputs=Object.values(connected).filter(Boolean).length;return <div><div className="cards">{[["Live Viewers",live?"1":"0"],["Total Views",String(totalViews)],["Program",program?.name||"Standby"],["Followers","—"],["Peak Viewers",String(peakViewers)],["Health",live?"Stable":"Standby"],["Stream Time",fmt(duration)],["Outputs",String(outputs)]].map(x=><div className="metric" key={x[0]}><small>{x[0]}</small><strong>{x[1]}</strong><span>{live?"Live now":"Today"}</span></div>)}</div><div className="panel" style={{marginTop:12}}><div className="title"><b>OUTPUT HEALTH</b></div>{Object.entries(connected).map(([name,on])=><div className="health" key={name}><span>{name}</span><b>{on?(live?"LIVE":"READY"):"OFFLINE"}</b></div>)}</div></div>
 }
 
 function Settings({notify}:{notify:(x:string)=>void}){

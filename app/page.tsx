@@ -192,6 +192,24 @@ export default function Home(){
 
   const playMedia=(id:string)=>{setPreviewMediaId(id);setPreviewWebUrl("");setPreviewTime(0);setPreviewPlaying(true);setActiveSource("media");const file=mediaFiles.find(x=>x.id===id);if(file)notify(file.name+" started in Preview")};
 
+  const playScheduled=(row:string[])=>{
+    const id=row[3];
+    if(!id){notify("No video is assigned to this programme");return;}
+    const media=mediaFiles.find(x=>x.id===id);
+    if(!media){notify("Scheduled media is not available");return;}
+    setPreviewMediaId(media.id);
+    setPreviewWebUrl("");
+    setPreviewPlaying(true);
+    setPreviewTime(0);
+    setProgramMediaId(media.id);
+    setProgramWebUrl("");
+    setProgramPlaying(true);
+    setProgramTime(0);
+    setActiveSource("media");
+    setTransition("cut");
+    notify("PROGRAM NOW: "+media.name);
+  };
+
   const addProgramme=()=>{
     const name=prompt("Programme name","New Programme");
     if(!name?.trim())return;
@@ -215,12 +233,13 @@ export default function Home(){
         previewTime={previewTime} programTime={programTime} volume={volume} muted={muted}
         setVolume={setVolume} setMuted={setMuted} togglePreview={togglePreview} stopPreview={stopPreview}
         toggleProgram={toggleProgram} take={take} transition={transition} setTransition={setTransition} live={live} toggleLive={toggleLive}
+        onProgramEnded={()=>{setProgramPlaying(false);setProgramTime(0);notify("Program item finished — waiting for the next scheduled item")}}
         scenes={scenes} activeScene={activeScene} setActiveScene={setActiveScene} addScene={addScene}
         sources={sources} activeSource={activeSource} setActiveSource={setActiveSource} addSource={addSource} addWebSource={addWebSource}
         mediaFiles={mediaFiles} selectMedia={selectMedia} playMedia={playMedia} selectWeb={(url)=>{setPreviewMediaId("");setPreviewWebUrl(url);setPreviewPlaying(false);notify("Web page loaded into Preview")}} upload={()=>fileInputRef.current?.click()}
       />}
       {section==="playlist"&&<Playlist mediaFiles={mediaFiles} previewMediaId={previewMediaId} selectMedia={selectMedia} playMedia={playMedia} remove={removeMedia} upload={()=>fileInputRef.current?.click()}/>}
-      {section==="schedule"&&<Schedule rows={schedule} now={scheduleClock} auto={autoSchedule} setAuto={setAutoSchedule} setRows={setSchedule} add={addProgramme} mediaFiles={mediaFiles}/>}
+      {section==="schedule"&&<Schedule rows={schedule} now={scheduleClock} auto={autoSchedule} setAuto={setAutoSchedule} setRows={setSchedule} add={addProgramme} mediaFiles={mediaFiles} playNow={playScheduled}/>} 
       {section==="news"&&<News notify={notify}/>}
       {section==="media"&&<Media files={mediaFiles} selected={previewMediaId} select={selectMedia} remove={removeMedia} upload={()=>fileInputRef.current?.click()}/>}
       {section==="streaming"&&<Streaming connected={connected} setConnected={setConnected} live={live}/>}
@@ -237,7 +256,7 @@ function Studio(p:{
   preview:MediaFile|null;program:MediaFile|null;previewWebUrl:string;programWebUrl:string;previewPlaying:boolean;programPlaying:boolean;
   previewTime:number;programTime:number;volume:number;muted:boolean;setVolume:(v:number)=>void;setMuted:(v:boolean)=>void;
   togglePreview:()=>void;stopPreview:()=>void;toggleProgram:()=>void;take:(mode?:"cut"|"fade",time?:number)=>void;transition:"cut"|"fade";setTransition:(v:"cut"|"fade")=>void;
-  live:boolean;toggleLive:()=>void;scenes:Scene[];activeScene:string;setActiveScene:(v:string)=>void;addScene:()=>void;
+  live:boolean;toggleLive:()=>void;onProgramEnded?:()=>void;scenes:Scene[];activeScene:string;setActiveScene:(v:string)=>void;addScene:()=>void;
   sources:Source[];activeSource:string;setActiveSource:(v:string)=>void;addSource:()=>void;addWebSource:()=>void;
   mediaFiles:MediaFile[];selectMedia:(id:string)=>void;playMedia:(id:string)=>void;selectWeb:(url:string)=>void;upload:()=>void;
 }){
@@ -281,7 +300,7 @@ function Studio(p:{
           ref={preview?previewRef:programRef} key={file.id} src={file.url} muted={p.muted} preload="auto" playsInline
           onTimeUpdate={e=>{preview?setPreviewClock(e.currentTarget.currentTime):setProgramClock(e.currentTarget.currentTime)}}
           onLoadedMetadata={e=>{e.currentTarget.currentTime=preview?p.previewTime:p.programTime;if(preview)setPreviewClock(p.previewTime);else setProgramClock(p.programTime)}}
-          onEnded={()=>{if(preview)p.stopPreview()}}
+          onEnded={()=>{if(preview)p.stopPreview();else p.onProgramEnded?.()}}
         />}
         {file?.type.startsWith("image/")&&<img src={file.url} alt={file.name}/>}
         {file?.type.startsWith("audio/")&&<div className="audioScreen"><strong>♫ {file.name}</strong><audio src={file.url} controls autoPlay={!preview&&p.programPlaying}/></div>}
@@ -352,11 +371,11 @@ function Media({files,selected,select,remove,upload}:{files:MediaFile[];selected
   return <div className="panel full"><div className="title"><b>MEDIA LIBRARY</b><button onClick={upload}>＋ Upload Media</button></div><div className="media">{["🎬 Videos","🖼 Images","🎵 Audio","📢 Advertisements","📁 Playlists","🎞 Movies"].map(x=><button key={x} onClick={upload}><b>{x}</b><small>{files.length} files</small></button>)}</div><div className="libraryList">{files.length===0?<div className="empty">No media uploaded yet.</div>:files.map(f=><div className={"libraryItem "+(selected===f.id?"selected":"")} key={f.id} onClick={()=>select(f.id)}><div className="thumb">{f.type.startsWith("image/")?<img src={f.url} alt=""/>:f.type.startsWith("video/")?"▶":"♫"}</div><div><b>{f.name}</b><small>{f.type} • {(f.size/1024/1024).toFixed(1)} MB</small></div><button onClick={e=>{e.stopPropagation();remove(f.id)}}>Remove</button></div>)}</div><p className="muted">Select a file to load it into Preview. It does not replace Program.</p></div>
 }
 
-function Schedule({rows,now,auto,setAuto,setRows,add,mediaFiles}:{rows:string[][];now:string;auto:boolean;setAuto:(v:boolean)=>void;setRows:(v:string[][])=>void;add:()=>void;mediaFiles:MediaFile[]}){
-  const update=(i:number,j:number,v:string)=>setRows(rows.map((r,ri)=>ri===i?{...r,[j]:v}:r));
+function Schedule({rows,now,auto,setAuto,setRows,add,mediaFiles,playNow}:{rows:string[][];now:string;auto:boolean;setAuto:(v:boolean)=>void;setRows:(v:string[][])=>void;add:()=>void;mediaFiles:MediaFile[];playNow:(row:string[])=>void}){
+  const update=(i:number,j:number,v:string)=>setRows(rows.map((r,ri)=>ri===i?r.map((x,ci)=>ci===j?v:x):r));
   const remove=(i:number)=>setRows(rows.filter((_,ri)=>ri!==i));
-  const test=(i:number)=>{const id=rows[i]?.[3];if(!id)return;window.dispatchEvent(new CustomEvent("dtv-test-program",{detail:{mediaId:id}}));};
-  return <div className="panel full"><div className="title"><b>WEEKLY PROGRAMME SCHEDULE</b><div className="scheduleActions"><em className={auto?"green":""}>{auto?"AUTO ON":"AUTO OFF"}</em><button onClick={()=>setAuto(!auto)}>{auto?"Disable":"Enable"} Automation</button><button onClick={add}>＋ Add Programme</button></div></div><div className="scheduleStatus"><span>CONTROL CLOCK <b>{now||"--:--"}</b></span><span>{auto?"Schedule monitoring active":"Manual scheduling"}</span></div><div className="table"><div className="thead"><span>TIME</span><span>PROGRAMME</span><span>SOURCE</span><span>VIDEO / MEDIA</span><span>STATUS</span><span>ACTION</span></div>{rows.map((r,i)=><div className={"tr "+(r[0]===now?"current":"")} key={i}><input value={r[0]||""} onChange={e=>update(i,0,e.target.value)}/><input value={r[1]||""} onChange={e=>update(i,1,e.target.value)}/><select value={r[2]||"Video"} onChange={e=>update(i,2,e.target.value)}><option>Camera</option><option>Video</option><option>Auto News</option><option>Advertisement</option><option>Movie</option><option>Web</option></select><select value={r[3]||""} onChange={e=>update(i,3,e.target.value)} disabled={!["Video","Advertisement","Movie"].includes(r[2]||"Video")}><option value="">Select video…</option>{mediaFiles.filter(f=>f.type.startsWith("video/")).map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select><em>{r[0]===now?"NOW":"Scheduled"}</em><button onClick={()=>test(i)} disabled={!r[3]}>▶ Test</button><button onClick={()=>remove(i)}>Remove</button></div>)}</div><p className="muted">Choose a video in the VIDEO / MEDIA column. When AUTO is ON and the control clock reaches that row's time, the selected video is loaded into Program and starts playing automatically. Videos are currently browser-session media until cloud/Android storage is connected.</p></div>
+
+  return <div className="panel full"><div className="title"><b>WEEKLY PROGRAMME SCHEDULE</b><div className="scheduleActions"><em className={auto?"green":""}>{auto?"AUTO ON":"AUTO OFF"}</em><button onClick={()=>setAuto(!auto)}>{auto?"Disable":"Enable"} Automation</button><button onClick={add}>＋ Add Programme</button></div></div><div className="scheduleStatus"><span>CONTROL CLOCK <b>{now||"--:--"}</b></span><span>{auto?"Schedule monitoring active":"Manual scheduling"}</span></div><div className="table"><div className="thead"><span>TIME</span><span>PROGRAMME</span><span>SOURCE</span><span>VIDEO / MEDIA</span><span>STATUS</span><span>ACTION</span></div>{rows.map((r,i)=><div className={"tr "+(r[0]===now?"current":"")} key={i}><input value={r[0]||""} onChange={e=>update(i,0,e.target.value)}/><input value={r[1]||""} onChange={e=>update(i,1,e.target.value)}/><select value={r[2]||"Video"} onChange={e=>update(i,2,e.target.value)}><option>Camera</option><option>Video</option><option>Auto News</option><option>Advertisement</option><option>Movie</option><option>Web</option></select><select value={r[3]||""} onChange={e=>update(i,3,e.target.value)} disabled={!["Video","Advertisement","Movie"].includes(r[2]||"Video")}><option value="">Select video…</option>{mediaFiles.filter(f=>f.type.startsWith("video/")).map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select><em>{r[0]===now?"NOW":"Scheduled"}</em><button onClick={()=>playNow(r)} disabled={!r[3]}>▶ Play Now</button><button onClick={()=>remove(i)}>Remove</button></div>)}</div><p className="muted">Choose a video in the VIDEO / MEDIA column. Use PLAY NOW to send a scheduled item directly to Program. When AUTO is ON and the control clock reaches that row's time, the selected video is loaded into Program and starts automatically. Videos are currently browser-session media until cloud/Android storage is connected.</p></div>
 }
 
 function News({notify}:{notify:(x:string)=>void}){return <div className="two"><div className="panel"><div className="title"><b>AUTO NEWS</b><em className="green">AUTO VOICE</em></div><div className="news"><small>COURTESY OF CONFIGURED SOURCE</small><h2>Automated broadcast news</h2><p>Approved RSS/API feeds can be collected, summarized, attributed and prepared for broadcast.</p><div className="ticker">KENYA • AFRICA • WORLD • SPORTS • BUSINESS • ENTERTAINMENT</div></div><div className="buttons"><button onClick={()=>notify("News test started")}>▶ Test News</button><button onClick={()=>notify("News source setup opened")}>＋ Add News Source</button><button onClick={()=>notify("Voice settings opened")}>⚙ Voice Settings</button></div></div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>{["TUKO NEWS","STANDARD MEDIA","GDELT / GLOBAL","Custom RSS / API"].map(s=><div className="health" key={s}><span>{s}</span><b>Ready</b></div>)}</div></div>}

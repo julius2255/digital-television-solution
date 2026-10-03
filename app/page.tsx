@@ -10,7 +10,8 @@ const sections:[Section,string,string][]=[
   ["audience","👥","Audience & Sharing"],["settings","⚙","Settings"]
 ];
 
-type Layer={id:string;name:string;kind:string;url?:string;type?:string;visible:boolean};\ntype MediaFile={id:string;name:string;type:string;url:string;size:number};
+type Layer={id:string;name:string;kind:string;url?:string;type?:string;visible:boolean};
+type MediaFile={id:string;name:string;type:string;url:string;size:number};
 
 const seedSchedule=[
   ["07:00","Morning Jolly Show","Camera"],["10:00","Morning News","Auto News"],

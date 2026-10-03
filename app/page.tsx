@@ -33,6 +33,7 @@ const initialScenes:Scene[]=[
 
 const initialSources:Source[]=[
   {id:"camera",name:"Camera",kind:"Camera",visible:true},
+  {id:"screen",name:"Screen Capture",kind:"Screen",visible:true},
   {id:"video",name:"Video",kind:"Video",visible:true},
   {id:"image",name:"Image",kind:"Image",visible:true},
   {id:"audio",name:"Audio",kind:"Audio",visible:true},
@@ -76,7 +77,9 @@ export default function Home(){
   const [toast,setToast]=useState("");
   const [connected,setConnected]=useState<Record<string,boolean>>({YouTube:false,Facebook:false,TikTok:false,"Custom RTMP":false});
   const cameraStreamRef=useRef<MediaStream|null>(null);
+  const screenStreamRef=useRef<MediaStream|null>(null);
   const [cameraReady,setCameraReady]=useState(false);
+  const [screenReady,setScreenReady]=useState(false);
   const [cameraFacing,setCameraFacing]=useState<"user"|"environment">("user");
   const [schedule,setSchedule]=useState<string[][]>(seedSchedule);
   const [autoSchedule,setAutoSchedule]=useState(true);
@@ -168,6 +171,8 @@ export default function Home(){
   const startCamera=async()=>{try{if(cameraStreamRef.current){setCameraReady(true);setActiveSource("camera");return;}const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:cameraFacing}},audio:true});cameraStreamRef.current=stream;setCameraReady(true);setActiveSource("camera");setPreviewMediaId("");setPreviewWebUrl("");setPreviewPlaying(true);setPreviewLayers([]);notify(cameraFacing==="user"?"Front camera is ready in Preview":"Back camera is ready in Preview")}catch{notify("Camera access was denied or is unavailable")}};
   const flipCamera=async()=>{const next=cameraFacing==="user"?"environment":"user" as "user"|"environment";try{if(cameraStreamRef.current)cameraStreamRef.current.getTracks().forEach(t=>t.stop());const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{exact:next}},audio:true});cameraStreamRef.current=stream;setCameraFacing(next);setCameraReady(true);setActiveSource("camera");notify(next==="user"?"Switched to front camera":"Switched to back camera")}catch{try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:next}},audio:true});cameraStreamRef.current=stream;setCameraFacing(next);setCameraReady(true);setActiveSource("camera");notify(next==="user"?"Switched to front camera":"Switched to back camera")}catch{notify("Could not switch camera on this device")}}};
   const stopCamera=()=>{cameraStreamRef.current?.getTracks().forEach(t=>t.stop());cameraStreamRef.current=null;setCameraReady(false);if(activeSource==="camera")setActiveSource("video");notify("Camera source stopped")};
+  const startScreenShare=async()=>{try{if(!navigator.mediaDevices?.getDisplayMedia){notify("Screen capture is not supported by this browser");return;}if(screenStreamRef.current){setScreenReady(true);setActiveSource("screen");return;}const stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});screenStreamRef.current=stream;setScreenReady(true);setActiveSource("screen");setPreviewMediaId("");setPreviewWebUrl("");setPreviewPlaying(true);setPreviewLayers([]);stream.getVideoTracks()[0]?.addEventListener("ended",()=>{screenStreamRef.current=null;setScreenReady(false);if(activeSource==="screen")setActiveSource("video");notify("Screen sharing stopped")});notify("Screen capture is ready in Preview")}catch{notify("Screen sharing was cancelled or unavailable")}};
+  const stopScreenShare=()=>{screenStreamRef.current?.getTracks().forEach(t=>t.stop());screenStreamRef.current=null;setScreenReady(false);if(activeSource==="screen")setActiveSource("video");notify("Screen capture stopped")};
   const addSource=()=>{
     const name=prompt("Source name","New Source");
     if(!name?.trim())return;
@@ -273,7 +278,7 @@ export default function Home(){
         onProgramEnded={()=>{const current=programMediaId;if(current&&playNextPlaylistItem(current))return;setProgramPlaying(false);setProgramTime(0);notify("Program item finished — waiting for the next scheduled item")}}
         scenes={scenes} activeScene={activeScene} setActiveScene={setActiveScene} addScene={addScene}
         sources={sources} activeSource={activeSource} setActiveSource={setActiveSource} addSource={addSource} addWebSource={addWebSource}
-        mediaFiles={mediaFiles} selectMedia={selectMedia} playMedia={playMedia} selectWeb={(url)=>{setPreviewMediaId("");setPreviewWebUrl(url);setPreviewPlaying(false);notify("Web page loaded into Preview")}} upload={()=>fileInputRef.current?.click()} cameraStream={cameraStreamRef.current} cameraReady={cameraReady} cameraFacing={cameraFacing} startCamera={startCamera} flipCamera={flipCamera} stopCamera={stopCamera}
+        mediaFiles={mediaFiles} selectMedia={selectMedia} playMedia={playMedia} selectWeb={(url)=>{setPreviewMediaId("");setPreviewWebUrl(url);setPreviewPlaying(false);notify("Web page loaded into Preview")}} upload={()=>fileInputRef.current?.click()} cameraStream={cameraStreamRef.current} cameraReady={cameraReady} cameraFacing={cameraFacing} startCamera={startCamera} flipCamera={flipCamera} stopCamera={stopCamera} screenStream={screenStreamRef.current} screenReady={screenReady} startScreenShare={startScreenShare} stopScreenShare={stopScreenShare}
       />}
       {section==="playlist"&&<Playlist mediaFiles={mediaFiles} playlistIds={playlistIds} previewMediaId={previewMediaId} selectMedia={selectMedia} playMedia={playMedia} remove={removeMedia} move={movePlaylist} removeFromPlaylist={removeFromPlaylist} addToPlaylist={addToPlaylist} playNow={playPlaylistItem} upload={()=>fileInputRef.current?.click()}/>}
       {section==="schedule"&&<Schedule rows={schedule} now={scheduleClock} auto={autoSchedule} setAuto={setAutoSchedule} setRows={setSchedule} add={addProgramme} mediaFiles={mediaFiles} playNow={playScheduled} showLogoMap={showLogoMap} setShowLogoMap={setShowLogoMap} imageFiles={mediaFiles.filter(f=>f.type.startsWith("image/"))}/>} 
@@ -297,13 +302,13 @@ function Studio(p:{
   take:(mode?:"cut"|"fade",time?:number)=>void;transition:"cut"|"fade";setTransition:(v:"cut"|"fade")=>void;
   live:boolean;toggleLive:()=>void;onProgramEnded?:()=>void;scenes:Scene[];activeScene:string;setActiveScene:(v:string)=>void;addScene:()=>void;
   sources:Source[];activeSource:string;setActiveSource:(v:string)=>void;addSource:()=>void;addWebSource:()=>void;
-  mediaFiles:MediaFile[];selectMedia:(id:string)=>void;playMedia:(id:string)=>void;selectWeb:(url:string)=>void;upload:()=>void;cameraStream:MediaStream|null;cameraReady:boolean;cameraFacing:"user"|"environment";startCamera:()=>void;flipCamera:()=>void;stopCamera:()=>void;
+  mediaFiles:MediaFile[];selectMedia:(id:string)=>void;playMedia:(id:string)=>void;selectWeb:(url:string)=>void;upload:()=>void;cameraStream:MediaStream|null;cameraReady:boolean;cameraFacing:"user"|"environment";startCamera:()=>void;flipCamera:()=>void;stopCamera:()=>void;screenStream:MediaStream|null;screenReady:boolean;startScreenShare:()=>void;stopScreenShare:()=>void;
 }){
   const previewRef=useRef<HTMLVideoElement>(null);
   const programRef=useRef<HTMLVideoElement>(null);
   const previewWebRef=useRef<HTMLIFrameElement>(null);
-  const previewCameraRef=useRef<HTMLVideoElement>(null);const programCameraRef=useRef<HTMLVideoElement>(null);
-  useEffect(()=>{if(previewCameraRef.current)previewCameraRef.current.srcObject=p.cameraStream},[p.cameraStream]);useEffect(()=>{if(programCameraRef.current)programCameraRef.current.srcObject=p.cameraStream},[p.cameraStream]);
+  const previewCameraRef=useRef<HTMLVideoElement>(null);const programCameraRef=useRef<HTMLVideoElement>(null);const previewScreenRef=useRef<HTMLVideoElement>(null);const programScreenRef=useRef<HTMLVideoElement>(null);
+  useEffect(()=>{if(previewCameraRef.current)previewCameraRef.current.srcObject=p.cameraStream},[p.cameraStream]);useEffect(()=>{if(programCameraRef.current)programCameraRef.current.srcObject=p.cameraStream},[p.cameraStream]);useEffect(()=>{if(previewScreenRef.current)previewScreenRef.current.srcObject=p.screenStream},[p.screenStream]);useEffect(()=>{if(programScreenRef.current)programScreenRef.current.srcObject=p.screenStream},[p.screenStream]);
   const programWebRef=useRef<HTMLIFrameElement>(null);
   const editorRef=useRef<HTMLDivElement>(null);
   const dragRef=useRef<{id:string;mode:"move"|"resize"|"crop";startX:number;startY:number;x:number;y:number;width:number;height:number;cropTop:number;cropRight:number;cropBottom:number;cropLeft:number}|null>(null);
@@ -403,6 +408,7 @@ function Studio(p:{
   const composition=(program:boolean)=>{
     const layers=program?p.programLayers:p.previewLayers;
     const base=layers.find(x=>x.id==="base");const cameraActive=p.activeSource==="camera"&&!!p.cameraStream;
+  const screenActive=p.activeSource==="screen"&&!!p.screenStream;
     return <div className={"composition "+(program&&fadePulse?"programFade":"")} style={program?{"--fade-duration":p.fadeSpeed+"ms"} as React.CSSProperties:undefined} ref={!program?editorRef:null}>
       {!base&&!program&&cameraActive&&<video ref={previewCameraRef} className="compositionCamera" autoPlay muted playsInline/>}{!base&&!program&&p.previewWebUrl&&<iframe ref={previewWebRef} className="compositionWeb" src={p.previewWebUrl} title="Preview Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
       {!base&&program&&cameraActive&&<video ref={programCameraRef} className="compositionCamera" autoPlay muted={!p.programPlaying||p.muted} playsInline/>}{!base&&program&&p.programWebUrl&&<iframe ref={programWebRef} className="compositionWeb" src={p.programWebUrl} title="Program Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
@@ -437,7 +443,7 @@ function Studio(p:{
 
     <div className="obsBarSimple">
       <div className="panel compact"><div className="title"><b>SCENES</b><button onClick={p.addScene}>＋</button></div>{p.scenes.map(s=><button key={s.id} className={"scene "+(p.activeScene===s.id?"selected":"")} onClick={()=>p.setActiveScene(s.id)}>▣ {s.name}</button>)}</div>
-      <div className="panel compact"><div className="title"><b>SOURCES</b><button onClick={p.addSource}>＋</button></div><div className="sourceGrid">{p.sources.map(s=><button key={s.id} className={p.activeSource===s.id?"sourceSelected":""} onClick={()=>{if(s.kind==="Camera"){p.startCamera();return;}p.setActiveSource(s.id);if(s.kind==="Web"&&s.url)p.selectWeb(s.url)}}>{s.kind==="Camera"?"▣":s.kind==="Image"?"▧":s.kind==="Audio"?"◖":s.kind==="Web"?"◎":s.kind==="Text"?"T":"▶"} {s.name}<b>＋</b></button>)}</div><button className="webSourceButton" onClick={p.addWebSource}>＋ Add Web Browser Source</button>{p.cameraReady&&<div className="cameraControls"><button className="webSourceButton" onClick={p.flipCamera}>🔄 Flip Camera ({p.cameraFacing==="user"?"Front":"Back"})</button><button className="webSourceButton" onClick={p.stopCamera}>■ Stop Camera</button></div>}</div>
+      <div className="panel compact"><div className="title"><b>SOURCES</b><button onClick={p.addSource}>＋</button></div><div className="sourceGrid">{p.sources.map(s=><button key={s.id} className={p.activeSource===s.id?"sourceSelected":""} onClick={()=>{if(s.kind==="Camera"){p.startCamera();return;}if(s.kind==="Screen"){p.startScreenShare();return;}p.setActiveSource(s.id);if(s.kind==="Web"&&s.url)p.selectWeb(s.url)}}>{s.kind==="Camera"?"▣":s.kind==="Screen"?"▥":s.kind==="Image"?"▧":s.kind==="Audio"?"◖":s.kind==="Web"?"◎":s.kind==="Text"?"T":"▶"} {s.name}<b>＋</b></button>)}</div><button className="webSourceButton" onClick={p.addWebSource}>＋ Add Web Browser Source</button>{p.cameraReady&&<div className="cameraControls"><button className="webSourceButton" onClick={p.flipCamera}>🔄 Flip Camera ({p.cameraFacing==="user"?"Front":"Back"})</button><button className="webSourceButton" onClick={p.stopCamera}>■ Stop Camera</button></div>}{p.screenReady&&<div className="cameraControls"><button className="webSourceButton" onClick={p.stopScreenShare}>■ Stop Screen Capture</button></div>}</div>
       <div className="panel compact"><div className="title"><b>MEDIA LIBRARY</b><button onClick={p.upload}>＋ Add</button></div><div className="mediaMini">{p.mediaFiles.length===0?<div className="empty">Add video, image or audio files.</div>:p.mediaFiles.map(f=><button key={f.id} className={"mediaMiniRow "+(p.preview?.id===f.id?"selected":"")} onClick={()=>p.selectMedia(f.id)}><span>{f.type.startsWith("video/")?"▶":f.type.startsWith("image/")?"▧":"♫"}</span><b>{f.name}</b><small>Preview</small><i>▶</i></button>)}</div></div>
       <div className="panel compact"><div className="title"><b>AUDIO MIXER</b><em>{p.muted?"MUTED":"PROGRAM AUDIO • "+Math.round(p.volume*100)+"%"}</em></div><div className="mixerRow"><div className="mixerName"><b>PROGRAM AUDIO</b><span>{p.programPlaying&&!p.muted?"● LIVE":""}</span></div><div className="meter"><i className={p.programPlaying&&!p.muted?"meterLive":""}/></div><div className="volumeLine"><button onClick={()=>p.setMuted(!p.muted)}>{p.muted?"🔇":"🔊"}</button><input aria-label="Program audio volume" type="range" min="0" max="1" step=".01" value={p.volume} onChange={e=>p.setVolume(Number(e.target.value))}/><span>{Math.round(p.volume*100)}%</span></div></div><small className="muted">Preview audio is always muted. Only the Program base source can feed broadcast audio; logo/overlay videos are muted.</small></div>
     </div>

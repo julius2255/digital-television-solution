@@ -54,7 +54,7 @@ export default function Home(){
   const resetPlayback=()=>{setPlaying(false);setElapsed("00:00:00");notify("Playback reset")};
   const addLayer=()=>{const f=mediaFiles.find(x=>x.id===selectedMedia);const kind=f?(f.type.startsWith("image/")?"Image":f.type.startsWith("audio/")?"Audio":"Video"):source;const layer:Layer={id:String(Date.now()),name:f?.name||kind,kind,url:f?.url,type:f?.type,visible:true};setLayers(v=>[...v,layer]);setSelectedLayer(layer.id);notify(layer.name+" added as layer")};
   const addTextLayer=()=>{const t=prompt("Text to add to preview","DIGITAL TELEVISION");if(t?.trim()){const layer:Layer={id:String(Date.now()),name:t.trim(),kind:"Text",visible:true};setLayers(v=>[...v,layer]);setSelectedLayer(layer.id);notify("Text layer added")}};
-  const removeLayer=()=>{if(selectedLayer==="camera-base")return;setLayers(v=>v.filter(x=>x.id!==selectedLayer));setSelectedLayer("camera-base");notify("Layer removed")};
+  const removeLayer=(id:string)=>{if(id==="camera-base")return;setLayers(v=>v.filter(x=>x.id!==id));if(selectedLayer===id)setSelectedLayer("camera-base");notify("Layer removed")};
   const toggleLayer=(id:string)=>setLayers(v=>v.map(x=>x.id===id?{...x,visible:!x.visible}:x));
   const cutToProgram=()=>{setProgramLayers(layers.filter(x=>x.visible));notify("Preview sent to Program")};
 
@@ -75,7 +75,7 @@ export default function Home(){
   </main>
 }
 
-function Studio({live,toggleLive,playing,togglePlayback,resetPlayback,elapsed,selectedMedia,layers,programLayers,addLayer,addTextLayer,removeLayer,toggleLayer,cutToProgram}:{live:boolean;toggleLive:()=>void;playing:boolean;togglePlayback:()=>void;resetPlayback:()=>void;elapsed:string;selectedMedia:MediaFile|null;layers:Layer[];programLayers:Layer[];addLayer:()=>void;addTextLayer:()=>void;removeLayer:()=>void;toggleLayer:(x:string)=>void;cutToProgram:()=>void}){
+function Studio({live,toggleLive,playing,togglePlayback,resetPlayback,elapsed,selectedMedia,layers,programLayers,addLayer,addTextLayer,removeLayer,toggleLayer,cutToProgram}:{live:boolean;toggleLive:()=>void;playing:boolean;togglePlayback:()=>void;resetPlayback:()=>void;elapsed:string;selectedMedia:MediaFile|null;layers:Layer[];programLayers:Layer[];addLayer:()=>void;addTextLayer:()=>void;removeLayer:(x:string)=>void;toggleLayer:(x:string)=>void;cutToProgram:()=>void}){
   const [volume,setVolume]=useState(1);
   const [muted,setMuted]=useState(false);
   const videoRef=useRef<HTMLVideoElement>(null);

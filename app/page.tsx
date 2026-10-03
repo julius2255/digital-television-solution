@@ -506,8 +506,8 @@ function News({notify}:{notify:(x:string)=>void}){
   useEffect(()=>{
     const load=async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category),{cache:"no-store"});const j=await r.json();setItems(j.items||[])}catch{notify("News feed connection failed")}finally{setLoading(false)}};
     load();const id=window.setInterval(load,refresh*60000);return()=>{window.clearInterval(id);stopVoice()};
-  },[refresh]);
-  useEffect(()=>{if(autoVoice&&items.length)speakHeadline(items[selected%items.length])},[selected,autoVoice]);
+  },[refresh,category]);
+  useEffect(()=>{if(autoVoice&&items.length)speakHeadline(items[selected%items.length])},[selected,autoVoice,voiceName]);
   const current=items.length?items[selected%items.length]:null;
   return <div className="two"><div className="panel">
     <div className="title"><b>AUTO NEWS</b><em className="green">{speaking?"🔊 VOICE ON":"AUTO VOICE"}</em></div>

@@ -87,7 +87,7 @@ function Studio({live,toggleLive,scene,setScene,scenes,addScene,source,setSource
   const sources=[["📷","Camera"],["🎞","Video"],["🖼","Image"],["🔤","Text"],["🎙","Microphone"],["🌐","Browser"],["📰","Auto News"],["©","Logo"]];
   const audioLayers=layers.filter(l=>l.kind==="Video"||l.kind==="Audio"||l.kind==="Microphone");
   const renderLayer=(l:Layer)=><div className={"canvasLayer kind-"+l.kind.toLowerCase()} key={l.id}>
-    {l.kind==="Image"&&l.url?<img src={l.url} alt={l.name}/>:l.kind==="Video"&&l.url?<video src={l.url} autoPlay={playing} muted={muted} volume={volume} controls={false} loop playsInline/>:l.kind==="Audio"&&l.url?<audio src={l.url} autoPlay={playing} muted={muted} volume={volume} controls/>:l.kind==="Text"?<strong>{l.name}</strong>:<span>{l.kind==="Camera"?"LIVE CAMERA":l.name}</span>}
+    {l.kind==="Image"&&l.url?<img src={l.url} alt={l.name}/>:l.kind==="Video"&&l.url?<video src={l.url} autoPlay={playing} muted={muted} controls={false} loop playsInline ref={el=>{if(el)el.volume=volume}}/>:l.kind==="Audio"&&l.url?<audio src={l.url} autoPlay={playing} muted={muted} controls ref={el=>{if(el)el.volume=volume}}/>:l.kind==="Text"?<strong>{l.name}</strong>:<span>{l.kind==="Camera"?"LIVE CAMERA":l.name}</span>}
   </div>;
   const renderCanvas=(items:Layer[],label:string)=><div className="canvasWrap"><div className="canvasLabel">{label}</div><div className="canvas">{items.filter(x=>x.visible).map(renderLayer)}{items.length===0&&<span className="canvasEmpty">NO SOURCES</span>}</div></div>;
   return <div className="studioObs">

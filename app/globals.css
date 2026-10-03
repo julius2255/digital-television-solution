@@ -150,3 +150,5 @@
 .table .thead,.table .tr{grid-template-columns:80px minmax(130px,1.4fr) 100px minmax(130px,1.2fr) minmax(120px,1fr) 70px 82px 65px}
 .table .tr select{min-width:0}
 .mixerRow .muted{display:block;margin-top:6px;font-size:7px;line-height:1.4}
+
+.compositionCamera{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;z-index:0}

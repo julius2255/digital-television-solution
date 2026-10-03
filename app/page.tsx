@@ -25,6 +25,9 @@ export default function Home(){
   const [schedule,setSchedule]=useState(seedSchedule);
   const [toast,setToast]=useState("");
   const [connected,setConnected]=useState<Record<string,boolean>>({YouTube:false,Facebook:false,TikTok:false,"Custom RTMP":false});
+  const [source,setSource]=useState("Camera");
+  const [playing,setPlaying]=useState(false);
+  const [elapsed,setElapsed]=useState("00:00:00");
 
   const notify=(m:string)=>{setToast(m);setTimeout(()=>setToast(""),2500)};
   const toggleLive=()=>{setLive(v=>!v);notify(live?"Broadcast stopped":"Studio is ON AIR")};
@@ -32,6 +35,9 @@ export default function Home(){
   const addProgramme=()=>{const n=prompt("Programme name");if(!n?.trim())return;const t=prompt("Start time (HH:MM)","12:00")||"12:00";setSchedule(v=>[...v,[t,n.trim(),"Video"]].sort((a,b)=>a[0].localeCompare(b[0])));notify("Programme added")};
   const upload=()=>notify("Media picker will be connected to Cloudinary in the next stage");
   const toggleDestination=(n:string)=>{setConnected(v=>({...v,[n]:!v[n]}));notify((connected[n]?"Disconnected ":"Connected ")+n)};
+  const selectSource=(n:string)=>{setSource(n);notify(n+" source selected")};
+  const togglePlayback=()=>{setPlaying(v=>!v);notify(playing?"Playback paused":"Playback started")};
+  const resetPlayback=()=>{setPlaying(false);setElapsed("00:00:00");notify("Playback reset")};
 
   return <main className="app">
     <aside className="sidebar">
@@ -43,7 +49,7 @@ export default function Home(){
     <section className="main">
       <header><div><small className="eyebrow">DIGITAL TELEVISION SOLUTION</small><h1>{sections.find(x=>x[0]===section)?.[2]}</h1></div><div className="actions"><span>● System Ready</span><button className="go" onClick={toggleLive}>{live?"STOP LIVE":"GO LIVE"}</button></div></header>
 
-      {section==="studio"&&<Studio live={live} scene={scene} setScene={setScene} scenes={scenes} addScene={addScene}/>}
+      {section==="studio"&&<Studio live={live} scene={scene} setScene={setScene} scenes={scenes} addScene={addScene} source={source} setSource={selectSource} playing={playing} togglePlayback={togglePlayback} resetPlayback={resetPlayback} elapsed={elapsed}/>}
       {section==="schedule"&&<Schedule rows={schedule} add={addProgramme}/>}
       {section==="news"&&<News notify={notify}/>}
       {section==="media"&&<Media upload={upload}/>}
@@ -57,12 +63,17 @@ export default function Home(){
   </main>;
 }
 
-function Studio({live,scene,setScene,scenes,addScene}:{live:boolean;scene:string;setScene:(x:string)=>void;scenes:string[];addScene:()=>void}){
+function Studio({live,scene,setScene,scenes,addScene,source,setSource,playing,togglePlayback,resetPlayback,elapsed}:{live:boolean;scene:string;setScene:(x:string)=>void;scenes:string[];addScene:()=>void;source:string;setSource:(x:string)=>void;playing:boolean;togglePlayback:()=>void;resetPlayback:()=>void;elapsed:string}){
+  const sources=[["📷","Camera"],["🎞","Video"],["🖼","Image"],["🔤","Text"],["🎙","Microphone"],["🌐","Browser"],["📰","Auto News"],["©","Logo"]];
   return <div className="grid studio">
-    <div className="panel preview"><div className="title"><b>PROGRAM OUTPUT</b><em>{live?"LIVE":"PREVIEW"}</em></div><div className="screen"><strong>DIGITAL TELEVISION</strong><span>{live?scene.toUpperCase():"READY TO BROADCAST"}</span><small>Professional TV Automation</small></div><div className="transport"><button>▶</button><button>⏹</button><label>00:00:00</label></div></div>
+    <div className="panel preview">
+      <div className="title"><b>PROGRAM OUTPUT</b><em>{live?"LIVE":"PREVIEW"}</em></div>
+      <div className="screen"><strong>DIGITAL TELEVISION</strong><span>{live?scene.toUpperCase():"READY TO BROADCAST"}</span><small>{source} • {playing?"PLAYING":"PAUSED"}</small></div>
+      <div className="transport"><button onClick={togglePlayback}>{playing?"Ⅱ":"▶"}</button><button onClick={resetPlayback}>⏹</button><label>{elapsed}</label></div>
+    </div>
     <div className="panel"><div className="title"><b>SCENES</b><button onClick={addScene}>＋ New Scene</button></div>{scenes.map(s=><button key={s} onClick={()=>setScene(s)} className={"scene "+(scene===s?"selected":"")}>▣ {s}<small>{scene===s?"ACTIVE":"SELECT"}</small></button>)}</div>
-    <div className="panel"><div className="title"><b>SOURCES</b></div><div className="sourceGrid">{["📷 Camera","🎞 Video","🖼 Image","🔤 Text","🎙 Microphone","🌐 Browser","📰 Auto News","© Logo"].map(s=><button key={s}>{s}</button>)}</div></div>
-    <div className="panel"><div className="title"><b>BROADCAST HEALTH</b></div>{[["Connection","Stable"],["Bitrate","4.8 Mbps"],["Dropped Frames","0.00%"],["Watchdog","Active"]].map(x=><div className="health" key={x[0]}><span>{x[0]}</span><b>{x[1]}</b></div>)}</div>
+    <div className="panel"><div className="title"><b>SOURCES</b><em>{source.toUpperCase()}</em></div><div className="sourceGrid">{sources.map(([icon,name])=><button className={source===name?"sourceSelected":""} onClick={()=>setSource(name)} key={name}>{icon} {name}</button>)}</div></div>
+    <div className="panel"><div className="title"><b>BROADCAST HEALTH</b></div>{[["Connection",live?"Stable":"Standby"],["Bitrate",live?"4.8 Mbps":"0 Mbps"],["Dropped Frames","0.00%"],["Watchdog","Active"]].map(x=><div className="health" key={x[0]}><span>{x[0]}</span><b>{x[1]}</b></div>)}</div>
   </div>
 }
 
@@ -72,7 +83,7 @@ function News({notify}:{notify:(x:string)=>void}){return <div className="two"><d
 
 function Media({upload}:{upload:()=>void}){return <div className="panel full"><div className="title"><b>MEDIA LIBRARY</b><button onClick={upload}>＋ Upload Media</button></div><div className="media">{["🎬 Movies","📺 TV Shows","📢 Advertisements","🎵 Audio","🖼 Images","📁 Playlists"].map(x=><button key={x} onClick={upload}><b>{x}</b><small>0 files</small></button>)}</div><p className="muted">Cloud media storage, playlists, ad rotation and automatic preload will be connected next.</p></div>}
 
-function Streaming({connected,toggle,live}:{connected:Record<string,boolean>;toggle:(x:string)=>void;live:boolean}){return <div className="two"><div className="panel"><div className="title"><b>STREAMING OUTPUTS</b></div>{Object.keys(connected).map(x=><div className="dest" key={x}><div><b>{x}</b><small>{connected[x]?"Connected":"Not connected"}</small></div><button onClick={()=>toggle(x)}>{connected[x]?"Disconnect":"Connect"}</button></div>)}<button className="big" onClick={()=>alert(live?"Multi-destination broadcast started":"Start GO LIVE first")}>GO LIVE TO ALL CONNECTED DESTINATIONS</button></div><div className="panel"><div className="title"><b>FAILSAFE</b></div><p>✓ Automatic reconnect</p><p>✓ Internet-loss detection</p><p>✓ Standby fallback</p><p>✓ Watchdog recovery</p></div></div>}
+function Streaming({connected,toggle,live}:{connected:Record<string,boolean>;toggle:(x:string)=>void;live:boolean}){return <div className="two"><div className="panel"><div className="title"><b>STREAMING OUTPUTS</b></div>{Object.keys(connected).map(x=><div className="dest" key={x}><div><b>{x}</b><small>{connected[x]?"Connected":"Not connected"}</small></div><button onClick={()=>toggle(x)}>{connected[x]?"Disconnect":"Connect"}</button></div>)}<button className="big" onClick={()=>{if(!live){alert("Start GO LIVE first");return} if(!Object.values(connected).some(Boolean)){alert("Connect at least one destination first");return} alert("Multi-destination broadcast started")}}>GO LIVE TO ALL CONNECTED DESTINATIONS</button></div><div className="panel"><div className="title"><b>FAILSAFE</b></div><p>✓ Automatic reconnect</p><p>✓ Internet-loss detection</p><p>✓ Standby fallback</p><p>✓ Watchdog recovery</p></div></div>}
 
 function Analytics({live}:{live:boolean}){return <div className="cards">{[["Live Viewers",live?"1":"0"],["Total Views",live?"1":"0"],["Watch Time",live?"00:01":"00:00"],["Followers","0"],["Peak Viewers",live?"1":"0"],["Health",live?"Stable":"Standby"]].map(x=><div className="metric" key={x[0]}><small>{x[0]}</small><strong>{x[1]}</strong><span>Today</span></div>)}</div>}
 

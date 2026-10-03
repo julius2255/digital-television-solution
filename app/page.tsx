@@ -56,6 +56,7 @@ export default function Home(){
   const [sources,setSources]=useState<Source[]>(initialSources);
   const [activeSource,setActiveSource]=useState("video");
   const [mediaFiles,setMediaFiles]=useState<MediaFile[]>([]);
+  const [playlistIds,setPlaylistIds]=useState<string[]>([]);
   const [previewMediaId,setPreviewMediaId]=useState("");
   const [programMediaId,setProgramMediaId]=useState("");
   const [previewWebUrl,setPreviewWebUrl]=useState("");
@@ -77,8 +78,8 @@ export default function Home(){
   const lastAutoSlotRef=useRef("");
   const fileInputRef=useRef<HTMLInputElement>(null);
 
-  useEffect(()=>{try{const s=localStorage.getItem("dtv-schedule");if(s)setSchedule(JSON.parse(s));const a=localStorage.getItem("dtv-auto-schedule");if(a!==null)setAutoSchedule(a==="true")}catch{}},[]);
-  useEffect(()=>{try{localStorage.setItem("dtv-schedule",JSON.stringify(schedule));localStorage.setItem("dtv-auto-schedule",String(autoSchedule))}catch{}},[schedule,autoSchedule]);
+  useEffect(()=>{try{const s=localStorage.getItem("dtv-schedule");if(s)setSchedule(JSON.parse(s));const a=localStorage.getItem("dtv-auto-schedule");if(a!==null)setAutoSchedule(a==="true");const pl=localStorage.getItem("dtv-playlist");if(pl)setPlaylistIds(JSON.parse(pl))}catch{}},[]);
+  useEffect(()=>{try{localStorage.setItem("dtv-schedule",JSON.stringify(schedule));localStorage.setItem("dtv-auto-schedule",String(autoSchedule));localStorage.setItem("dtv-playlist",JSON.stringify(playlistIds))}catch{}},[schedule,autoSchedule,playlistIds]);
   useEffect(()=>{const tick=()=>{const d=new Date();const t=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");setScheduleClock(t)};tick();const id=window.setInterval(tick,15000);return()=>window.clearInterval(id)},[]);
 
   useEffect(()=>{
@@ -113,6 +114,7 @@ export default function Home(){
       url:URL.createObjectURL(file),size:file.size
     }));
     setMediaFiles(v=>[...v,...incoming]);
+    setPlaylistIds(v=>[...v,...incoming.map(x=>x.id)]);
     if(incoming[0]){
       setPreviewMediaId(incoming[0].id);
       setPreviewPlaying(false);
@@ -134,6 +136,7 @@ export default function Home(){
     const f=mediaFiles.find(x=>x.id===id);
     if(f)URL.revokeObjectURL(f.url);
     setMediaFiles(v=>v.filter(x=>x.id!==id));
+    setPlaylistIds(v=>v.filter(x=>x!==id));
     if(previewMediaId===id){setPreviewMediaId("");setPreviewPlaying(false)}
     notify("Media removed");
   };
@@ -197,6 +200,11 @@ export default function Home(){
   const toggleLive=()=>{setLive(v=>!v);notify(live?"Broadcast stopped":"Broadcast is ON AIR")};
 
   const playMedia=(id:string)=>{setPreviewMediaId(id);setPreviewWebUrl("");setPreviewTime(0);setPreviewPlaying(true);setActiveSource("media");const file=mediaFiles.find(x=>x.id===id);if(file)notify(file.name+" started in Preview")};
+  const movePlaylist=(id:string,dir:number)=>setPlaylistIds(v=>{const i=v.indexOf(id),j=i+dir;if(i<0||j<0||j>=v.length)return v;const a=[...v];[a[i],a[j]]=[a[j],a[i]];return a});
+  const removeFromPlaylist=(id:string)=>setPlaylistIds(v=>v.filter(x=>x!==id));
+  const addToPlaylist=(id:string)=>setPlaylistIds(v=>v.includes(id)?v:[...v,id]);
+  const playPlaylistItem=(id:string)=>{const file=mediaFiles.find(x=>x.id===id);if(!file)return;setPreviewMediaId(id);setPreviewWebUrl("");setPreviewTime(0);setPreviewPlaying(true);setProgramMediaId(id);setProgramWebUrl("");setProgramTime(0);setProgramPlaying(true);setProgramLayers([{id:"base",name:file.name,kind:file.type.startsWith("image/")?"image":"video",mediaId:id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false}]);setPreviewLayers([{id:"base",name:file.name,kind:file.type.startsWith("image/")?"image":"video",mediaId:id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false}]);notify("RUN ORDER: "+file.name)};
+  const playNextPlaylistItem=(currentId:string)=>{const i=playlistIds.indexOf(currentId);const nextId=playlistIds[i+1];if(nextId){playPlaylistItem(nextId);return true}return false};
 
   const playScheduled=(row:string[])=>{
     const id=row[3];
@@ -242,7 +250,7 @@ export default function Home(){
         previewLayers={previewLayers} setPreviewLayers={setPreviewLayers} programLayers={programLayers}
         setVolume={setVolume} setMuted={setMuted} togglePreview={togglePreview} stopPreview={stopPreview}
         toggleProgram={toggleProgram} take={take} transition={transition} setTransition={setTransition} live={live} toggleLive={toggleLive}
-        onProgramEnded={()=>{setProgramPlaying(false);setProgramTime(0);notify("Program item finished — waiting for the next scheduled item")}}
+        onProgramEnded={()=>{const current=programMediaId;if(current&&playNextPlaylistItem(current))return;setProgramPlaying(false);setProgramTime(0);notify("Program item finished — waiting for the next scheduled item")}}
         scenes={scenes} activeScene={activeScene} setActiveScene={setActiveScene} addScene={addScene}
         sources={sources} activeSource={activeSource} setActiveSource={setActiveSource} addSource={addSource} addWebSource={addWebSource}
         mediaFiles={mediaFiles} selectMedia={selectMedia} playMedia={playMedia} selectWeb={(url)=>{setPreviewMediaId("");setPreviewWebUrl(url);setPreviewPlaying(false);notify("Web page loaded into Preview")}} upload={()=>fileInputRef.current?.click()}
@@ -414,25 +422,14 @@ function Studio(p:{
     <div className="lowerStudio"><div className="panel"><div className="title"><b>PLAYLIST / RUN ORDER</b><em>{p.mediaFiles.length} MEDIA</em></div><div className="playlist">{p.mediaFiles.length===0?<div className="empty">Your playlist is empty.</div>:p.mediaFiles.map((f,i)=><div className="playlistRow" key={f.id}><strong>{i+1}</strong><span>{f.type.startsWith("video/")?"▶":f.type.startsWith("image/")?"▧":"♫"}</span><b>{f.name}</b><small>{(f.size/1024/1024).toFixed(1)} MB</small><button onClick={()=>p.selectMedia(f.id)}>Preview</button><button onClick={()=>p.playMedia(f.id)}>▶</button></div>)}</div></div><div className="panel programInfoPanel"><div className="title"><b>PROGRAM INFO</b></div><div className="programInfo"><span>NOW PLAYING</span><b>{p.program?.name||"Standby"}</b><small>{p.program?(p.programPlaying?"● Playing":"Stopped"):"No programme on Program"}</small></div><p className="muted">Preview is your editable canvas. Program only changes when you CUT or FADE the composition.</p></div></div>
   </div>
 }
-function Playlist({mediaFiles,previewMediaId,selectMedia,playMedia,remove,upload}:{mediaFiles:MediaFile[];previewMediaId:string;selectMedia:(id:string)=>void;playMedia:(id:string)=>void;remove:(id:string)=>void;upload:()=>void}){
-  return <div className="panel full"><div className="title"><b>PLAYLIST / RUN ORDER</b><button onClick={upload}>＋ Add Media</button></div><div className="playlist">{mediaFiles.length===0?<div className="empty">Upload videos to build the run order.</div>:mediaFiles.map((f,i)=><div className="playlistRow" key={f.id}><strong>{i+1}</strong><span>{f.type.startsWith("video/")?"▶":"♫"}</span><b>{f.name}</b><small>{(f.size/1024/1024).toFixed(1)} MB</small><button onClick={()=>selectMedia(f.id)}>{previewMediaId===f.id?"Selected":"Preview"}</button><button onClick={()=>playMedia(f.id)}>▶ Play</button><button onClick={()=>remove(f.id)}>×</button></div>)}</div></div>
+function Playlist({mediaFiles,playlistIds,previewMediaId,selectMedia,playMedia,remove,move,removeFromPlaylist,addToPlaylist,playNow,upload}:{mediaFiles:MediaFile[];playlistIds:string[];previewMediaId:string;selectMedia:(id:string)=>void;playMedia:(id:string)=>void;remove:(id:string)=>void;move:(id:string,dir:number)=>void;removeFromPlaylist:(id:string)=>void;addToPlaylist:(id:string)=>void;playNow:(id:string)=>void;upload:()=>void}){
+  const queued=playlistIds.map(id=>mediaFiles.find(f=>f.id===id)).filter(Boolean) as MediaFile[];
+  const unqueued=mediaFiles.filter(f=>!playlistIds.includes(f.id));
+  return <div className="panel full"><div className="title"><b>PLAYLIST / RUN ORDER</b><em>{queued.length} QUEUED</em><button onClick={upload}>＋ Add Media</button></div>
+    <div className="playlistRunHead"><span>ORDER</span><span>MEDIA</span><span>SIZE</span><span>ACTION</span></div>
+    <div className="playlist">{queued.length===0?<div className="empty">The run order is empty. Add media below to build the automatic playback queue.</div>:queued.map((f,i)=><div className="playlistRow" key={f.id}><strong>{i+1}</strong><span>{f.type.startsWith("video/")?"▶":f.type.startsWith("image/")?"▧":"♫"}</span><b>{f.name}</b><small>{(f.size/1024/1024).toFixed(1)} MB</small><button onClick={()=>selectMedia(f.id)}>{previewMediaId===f.id?"Selected":"Preview"}</button><button onClick={()=>playNow(f.id)}>▶ NOW</button><button onClick={()=>move(f.id,-1)} disabled={i===0}>↑</button><button onClick={()=>move(f.id,1)} disabled={i===queued.length-1}>↓</button><button onClick={()=>removeFromPlaylist(f.id)}>×</button></div>)}</div>
+    <div className="playlistAvailable"><div className="title"><b>AVAILABLE MEDIA</b><em>{unqueued.length} NOT QUEUED</em></div>{unqueued.length===0?<div className="empty">All media is already in the run order.</div>:unqueued.map(f=><div className="playlistAvailableRow" key={f.id}><span>{f.type.startsWith("video/")?"▶":f.type.startsWith("image/")?"▧":"♫"}</span><b>{f.name}</b><small>{(f.size/1024/1024).toFixed(1)} MB</small><button onClick={()=>addToPlaylist(f.id)}>＋ Queue</button><button onClick={()=>playMedia(f.id)}>Preview</button><button onClick={()=>remove(f.id)}>Remove</button></div>)}</div>
+    <p className="muted">Items are played in order. When a Program video finishes, the next queued item is started automatically. The queue is saved in this browser; uploaded media files themselves still need cloud/Android storage for persistence across devices.</p>
+  </div>
 }
 
-function Media({files,selected,select,remove,upload}:{files:MediaFile[];selected:string;select:(id:string)=>void;remove:(id:string)=>void;upload:()=>void}){
-  return <div className="panel full"><div className="title"><b>MEDIA LIBRARY</b><button onClick={upload}>＋ Upload Media</button></div><div className="media">{["🎬 Videos","🖼 Images","🎵 Audio","📢 Advertisements","📁 Playlists","🎞 Movies"].map(x=><button key={x} onClick={upload}><b>{x}</b><small>{files.length} files</small></button>)}</div><div className="libraryList">{files.length===0?<div className="empty">No media uploaded yet.</div>:files.map(f=><div className={"libraryItem "+(selected===f.id?"selected":"")} key={f.id} onClick={()=>select(f.id)}><div className="thumb">{f.type.startsWith("image/")?<img src={f.url} alt=""/>:f.type.startsWith("video/")?"▶":"♫"}</div><div><b>{f.name}</b><small>{f.type} • {(f.size/1024/1024).toFixed(1)} MB</small></div><button onClick={e=>{e.stopPropagation();remove(f.id)}}>Remove</button></div>)}</div><p className="muted">Select a file to load it into Preview. It does not replace Program.</p></div>
-}
-
-function Schedule({rows,now,auto,setAuto,setRows,add,mediaFiles,playNow}:{rows:string[][];now:string;auto:boolean;setAuto:(v:boolean)=>void;setRows:(v:string[][])=>void;add:()=>void;mediaFiles:MediaFile[];playNow:(row:string[])=>void}){
-  const update=(i:number,j:number,v:string)=>setRows(rows.map((r,ri)=>ri===i?r.map((x,ci)=>ci===j?v:x):r));
-  const remove=(i:number)=>setRows(rows.filter((_,ri)=>ri!==i));
-
-  return <div className="panel full"><div className="title"><b>WEEKLY PROGRAMME SCHEDULE</b><div className="scheduleActions"><em className={auto?"green":""}>{auto?"AUTO ON":"AUTO OFF"}</em><button onClick={()=>setAuto(!auto)}>{auto?"Disable":"Enable"} Automation</button><button onClick={add}>＋ Add Programme</button></div></div><div className="scheduleStatus"><span>CONTROL CLOCK <b>{now||"--:--"}</b></span><span>{auto?"Schedule monitoring active":"Manual scheduling"}</span></div><div className="table"><div className="thead"><span>TIME</span><span>PROGRAMME</span><span>SOURCE</span><span>VIDEO / MEDIA</span><span>STATUS</span><span>ACTION</span></div>{rows.map((r,i)=><div className={"tr "+(r[0]===now?"current":"")} key={i}><input value={r[0]||""} onChange={e=>update(i,0,e.target.value)}/><input value={r[1]||""} onChange={e=>update(i,1,e.target.value)}/><select value={r[2]||"Video"} onChange={e=>update(i,2,e.target.value)}><option>Camera</option><option>Video</option><option>Auto News</option><option>Advertisement</option><option>Movie</option><option>Web</option></select><select value={r[3]||""} onChange={e=>update(i,3,e.target.value)} disabled={!["Video","Advertisement","Movie"].includes(r[2]||"Video")}><option value="">Select video…</option>{mediaFiles.filter(f=>f.type.startsWith("video/")).map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select><em>{r[0]===now?"NOW":"Scheduled"}</em><button onClick={()=>playNow(r)} disabled={!r[3]}>▶ Play Now</button><button onClick={()=>remove(i)}>Remove</button></div>)}</div><p className="muted">Choose a video in the VIDEO / MEDIA column. Use PLAY NOW to send a scheduled item directly to Program. When AUTO is ON and the control clock reaches that row's time, the selected video is loaded into Program and starts automatically. Videos are currently browser-session media until cloud/Android storage is connected.</p></div>
-}
-
-function News({notify}:{notify:(x:string)=>void}){return <div className="two"><div className="panel"><div className="title"><b>AUTO NEWS</b><em className="green">AUTO VOICE</em></div><div className="news"><small>COURTESY OF CONFIGURED SOURCE</small><h2>Automated broadcast news</h2><p>Approved RSS/API feeds can be collected, summarized, attributed and prepared for broadcast.</p><div className="ticker">KENYA • AFRICA • WORLD • SPORTS • BUSINESS • ENTERTAINMENT</div></div><div className="buttons"><button onClick={()=>notify("News test started")}>▶ Test News</button><button onClick={()=>notify("News source setup opened")}>＋ Add News Source</button><button onClick={()=>notify("Voice settings opened")}>⚙ Voice Settings</button></div></div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>{["TUKO NEWS","STANDARD MEDIA","GDELT / GLOBAL","Custom RSS / API"].map(s=><div className="health" key={s}><span>{s}</span><b>Ready</b></div>)}</div></div>}
-
-function Streaming({connected,setConnected,live}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean}){return <div className="two"><div className="panel"><div className="title"><b>STREAMING OUTPUTS</b></div>{Object.keys(connected).map(x=><div className="dest" key={x}><div><b>{x}</b><small>{connected[x]?"Connected":"Not connected"}</small></div><button onClick={()=>setConnected({...connected,[x]:!connected[x]})}>{connected[x]?"Disconnect":"Connect"}</button></div>)}<button className="big" onClick={()=>alert(!live?"Start GO LIVE first":"Multi-destination broadcast started")}>GO LIVE TO ALL CONNECTED DESTINATIONS</button></div><div className="panel"><div className="title"><b>FAILSAFE</b></div><p>✓ Automatic reconnect</p><p>✓ Internet-loss detection</p><p>✓ Standby fallback</p><p>✓ Watchdog recovery</p></div></div>}
-
-function Analytics({live,program}:{live:boolean;program:MediaFile|null}){return <div className="cards">{[["Live Viewers",live?"1":"0"],["Total Views",live?"1":"0"],["Program",program?.name||"Standby"],["Followers","0"],["Peak Viewers",live?"1":"0"],["Health",live?"Stable":"Standby"]].map(x=><div className="metric" key={x[0]}><small>{x[0]}</small><strong>{x[1]}</strong><span>Today</span></div>)}</div>}
-
-function Settings({notify}:{notify:(x:string)=>void}){return <div className="panel full"><div className="title"><b>SYSTEM SETTINGS</b></div><div className="settings"><button onClick={()=>notify("Broadcast Engine settings opened")}>Broadcast Engine</button><button onClick={()=>notify("Cloud Media settings opened")}>Cloud Media</button><button onClick={()=>notify("Platform authentication opened")}>Platform Accounts</button><button onClick={()=>notify("Failsafe settings opened")}>Failsafe & Recovery</button></div><p className="muted">OBS-style control is now separated into Preview and Program. Real platform credentials, cloud storage and Android publishing will be connected in later stages.</p></div>}

@@ -318,6 +318,9 @@ function Studio(p:{
   const [fadePulse,setFadePulse]=useState(false);
   const [cropMode,setCropMode]=useState(false);
   const [canvasZoom,setCanvasZoom]=useState(100);
+  const [snapToGrid,setSnapToGrid]=useState(true);
+  const [gridSize,setGridSize]=useState(5);
+  const [showGrid,setShowGrid]=useState(true);
 
   useEffect(()=>{if(p.preview&&(!p.previewLayers.some(x=>x.id==="base")||p.previewLayers.find(x=>x.id==="base")?.mediaId!==p.preview.id)){
     const kind=p.preview.type.startsWith("image/")?"image":"video";
@@ -331,7 +334,8 @@ function Studio(p:{
   useEffect(()=>{const v=programRef.current;if(!v)return;if(p.programPlaying)v.play().catch(()=>{});else v.pause()},[p.programPlaying,p.program?.id]);
 
   useEffect(()=>{
-    const move=(e:PointerEvent)=>{const d=dragRef.current,el=editorRef.current;if(!d||!el)return;const r=el.getBoundingClientRect();const dx=(e.clientX-d.startX)/r.width*100,dy=(e.clientY-d.startY)/r.height*100;
+    const move=(e:PointerEvent)=>{const d=dragRef.current,el=editorRef.current;if(!d||!el)return;const r=el.getBoundingClientRect();let dx=(e.clientX-d.startX)/r.width*100,dy=(e.clientY-d.startY)/r.height*100;
+      if(snapToGrid&&d.mode==="move"){dx=Math.round((d.x+dx)/gridSize)*gridSize-d.x;dy=Math.round((d.y+dy)/gridSize)*gridSize-d.y;}
       p.setPreviewLayers(prev=>prev.map(l=>{
         if(l.id!==d.id)return l;
         if(d.mode==="move")return {...l,x:Math.max(0,Math.min(100-l.width,d.x+dx)),y:Math.max(0,Math.min(100-l.height,d.y+dy))};
@@ -429,7 +433,7 @@ function Studio(p:{
     <div className="obsTopSimple">{screen(false)}<div className="takeColumn"><button className="cutButton" onClick={()=>{p.setTransition("cut");p.take("cut",previewClock)}}>CUT</button><button className="fadeButton" onClick={()=>{p.setTransition("fade");setFadePulse(true);setTimeout(()=>setFadePulse(false),p.fadeSpeed);p.take("fade",previewClock)}}>FADE</button><select value={p.transition} onChange={e=>p.setTransition(e.target.value as "cut"|"fade")}><option value="cut">Cut</option><option value="fade">Fade</option></select><small>Full Preview → Program</small></div>{screen(true)}</div>
 
     <div className="studioEditor">
-      <div className="editorCanvasPanel panel"><div className="title"><b>PREVIEW EDITOR</b><em>DRAG • RESIZE • LAYER</em></div><div className="editorHint">OBS-style canvas: drag a layer to move it • drag any blue handle to resize/zoom • Ctrl/Cmd + wheel to zoom • Alt/Option-drag to crop • use 👁 to show/hide and 🗑 to delete.</div><div className="editorToolbar"><button onClick={()=>setCropMode(v=>!v)} className={cropMode?"active":""}>✂ {cropMode?"CROP MODE":"TRANSFORM"}</button><button onClick={()=>selected&&updateLayer(selected.id,{zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,rotation:0})}>RESET</button><button onClick={()=>selected&&updateLayer(selected.id,{x:0,y:0,width:100,height:100})}>FIT</button><button onClick={()=>selected&&updateLayer(selected.id,{x:5,y:5,width:90,height:90})}>FILL</button><label>CANVAS ZOOM <input type="range" min="60" max="160" value={canvasZoom} onChange={e=>setCanvasZoom(Number(e.target.value))}/><b>{canvasZoom}%</b></label><label>FADE <input type="range" min="200" max="3000" step="100" value={p.fadeSpeed} onChange={e=>p.setFadeSpeed(Number(e.target.value))}/><b>{(p.fadeSpeed/1000).toFixed(1)}s</b></label></div>
+      <div className="editorCanvasPanel panel"><div className="title"><b>PREVIEW EDITOR</b><em>DRAG • RESIZE • LAYER</em></div><div className="editorHint">OBS-style canvas: drag a layer to move it • drag any blue handle to resize/zoom • Ctrl/Cmd + wheel to zoom • Alt/Option-drag to crop • use 👁 to show/hide and 🗑 to delete.</div><div className="editorToolbar"><button onClick={()=>setShowGrid(v=>!v)}>{showGrid?"▦ GRID":"▧ NO GRID"}</button><button onClick={()=>setSnapToGrid(v=>!v)}>{snapToGrid?"🧲 SNAP ON":"🧲 SNAP OFF"}</button><select value={gridSize} onChange={e=>setGridSize(Number(e.target.value))}><option value={2}>2%</option><option value={5}>5%</option><option value={10}>10%</option><option value={20}>20%</option></select><button onClick={()=>setCropMode(v=>!v)} className={cropMode?"active":""}>✂ {cropMode?"CROP MODE":"TRANSFORM"}</button><button onClick={()=>selected&&updateLayer(selected.id,{zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,rotation:0})}>RESET</button><button onClick={()=>selected&&updateLayer(selected.id,{x:0,y:0,width:100,height:100})}>FIT</button><button onClick={()=>selected&&updateLayer(selected.id,{x:5,y:5,width:90,height:90})}>FILL</button><label>CANVAS ZOOM <input type="range" min="60" max="160" value={canvasZoom} onChange={e=>setCanvasZoom(Number(e.target.value))}/><b>{canvasZoom}%</b></label><label>FADE <input type="range" min="200" max="3000" step="100" value={p.fadeSpeed} onChange={e=>p.setFadeSpeed(Number(e.target.value))}/><b>{(p.fadeSpeed/1000).toFixed(1)}s</b></label></div>
         <div className="editorCanvas" style={{padding:"8px",overflow:"auto"}}><div className="editorZoomViewport" style={{width:canvasZoom+"%",margin:"0 auto"}}><div className="composition editorComposition" ref={editorRef}>{!p.previewLayers.some(x=>x.id==="base")&&!p.previewWebUrl&&<span className="screenEmpty">SELECT MEDIA TO START</span>}{!p.previewLayers.some(x=>x.id==="base")&&p.previewWebUrl&&<iframe className="compositionWeb" src={p.previewWebUrl} title="Editor Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}{p.previewLayers.map(l=>renderLayer(l,false))}</div></div></div>
       </div>
       <div className="editorSide panel">

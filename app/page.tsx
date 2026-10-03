@@ -276,7 +276,7 @@ function Studio(p:{
   const previewWebRef=useRef<HTMLIFrameElement>(null);
   const programWebRef=useRef<HTMLIFrameElement>(null);
   const editorRef=useRef<HTMLDivElement>(null);
-  const dragRef=useRef<{id:string;mode:"move"|"resize";startX:number;startY:number;x:number;y:number;width:number;height:number}|null>(null);
+  const dragRef=useRef<{id:string;mode:"move"|"resize"|"crop";startX:number;startY:number;x:number;y:number;width:number;height:number;cropTop:number;cropRight:number;cropBottom:number;cropLeft:number}|null>(null);
   const [previewClock,setPreviewClock]=useState(0);
   const [programClock,setProgramClock]=useState(0);
   const [selectedLayerId,setSelectedLayerId]=useState("");
@@ -297,7 +297,12 @@ function Studio(p:{
 
   useEffect(()=>{
     const move=(e:PointerEvent)=>{const d=dragRef.current,el=editorRef.current;if(!d||!el)return;const r=el.getBoundingClientRect();const dx=(e.clientX-d.startX)/r.width*100,dy=(e.clientY-d.startY)/r.height*100;
-      p.setPreviewLayers(prev=>prev.map(l=>l.id!==d.id?l:d.mode==="move"?{...l,x:Math.max(0,Math.min(100-l.width,d.x+dx)),y:Math.max(0,Math.min(100-l.height,d.y+dy))}:{...l,width:Math.max(5,Math.min(100-d.x,d.width+dx)),height:Math.max(5,Math.min(100-d.y,d.height+dy))}));
+      p.setPreviewLayers(prev=>prev.map(l=>{
+        if(l.id!==d.id)return l;
+        if(d.mode==="move")return {...l,x:Math.max(0,Math.min(100-l.width,d.x+dx)),y:Math.max(0,Math.min(100-l.height,d.y+dy))};
+        if(d.mode==="crop")return {...l,cropLeft:Math.max(0,Math.min(80,d.cropLeft-dx)),cropRight:Math.max(0,Math.min(80,d.cropRight+dx)),cropTop:Math.max(0,Math.min(80,d.cropTop-dy)),cropBottom:Math.max(0,Math.min(80,d.cropBottom+dy))};
+        return {...l,width:Math.max(5,Math.min(100-d.x,d.width+dx)),height:Math.max(5,Math.min(100-d.y,d.height+dy))};
+      }));
     };
     const up=()=>{dragRef.current=null};window.addEventListener("pointermove",move);window.addEventListener("pointerup",up);return()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up)}
   },[p.setPreviewLayers]);
@@ -318,7 +323,7 @@ function Studio(p:{
   const reorder=(id:string,dir:number)=>p.setPreviewLayers(v=>{const i=v.findIndex(x=>x.id===id),j=i+dir;if(i<0||j<0||j>=v.length)return v;const a=[...v];[a[i],a[j]]=[a[j],a[i]];return a});
   const removeLayer=(id:string)=>{if(id==="base")return;p.setPreviewLayers(v=>v.filter(x=>x.id!==id));setSelectedLayerId("")};
   const duplicateLayer=(id:string)=>{const l=p.previewLayers.find(x=>x.id===id);if(!l)return;const copy={...l,id:String(Date.now())+"-copy",name:l.name+" Copy",x:Math.min(100-l.width,l.x+3),y:Math.min(100-l.height,l.y+3)};p.setPreviewLayers(v=>[...v,copy]);setSelectedLayerId(copy.id)};
-  const beginDrag=(e:React.PointerEvent,id:string,mode:"move"|"resize")=>{e.stopPropagation();const l=p.previewLayers.find(x=>x.id===id);if(!l||l.locked)return;dragRef.current={id,mode,startX:e.clientX,startY:e.clientY,x:l.x,y:l.y,width:l.width,height:l.height};setSelectedLayerId(id)};
+  const beginDrag=(e:React.PointerEvent,id:string,mode:"move"|"resize")=>{e.stopPropagation();const l=p.previewLayers.find(x=>x.id===id);if(!l||l.locked)return;const actualMode=(cropMode||e.altKey||e.metaKey)&&l.id!=="base"?"crop":mode;dragRef.current={id,mode:actualMode,startX:e.clientX,startY:e.clientY,x:l.x,y:l.y,width:l.width,height:l.height,cropTop:l.cropTop,cropRight:l.cropRight,cropBottom:l.cropBottom,cropLeft:l.cropLeft};setSelectedLayerId(id)};
   const beginHandle=(e:React.PointerEvent,id:string,handle:string)=>{
     e.stopPropagation();const l=p.previewLayers.find(x=>x.id===id);const el=editorRef.current;if(!l||l.locked||!el)return;
     const r=el.getBoundingClientRect();
@@ -338,13 +343,21 @@ function Studio(p:{
     window.addEventListener("pointermove",onMove);window.addEventListener("pointerup",onUp);
   };
 
+  const handleEditorWheel=(e:React.WheelEvent)=>{
+    if(!selected||selected.locked)return;
+    if(e.ctrlKey||e.metaKey||e.shiftKey){
+      e.preventDefault();
+      const next=Math.max(0.25,Math.min(5,selected.zoom+(e.deltaY<0?0.1:-0.1)));
+      updateLayer(selected.id,{zoom:Number(next.toFixed(2))});
+    }
+  };
   const renderLayer=(l:StudioLayer,program:boolean)=>{
     if(!l.visible)return null;
     const media=p.mediaFiles.find(x=>x.id===l.mediaId);
     const style:React.CSSProperties={left:l.x+"%",top:l.y+"%",width:l.width+"%",height:l.height+"%",opacity:l.opacity,transform:"rotate("+l.rotation+"deg)"};
     const mediaStyle:React.CSSProperties={width:(100+l.cropLeft+l.cropRight)*l.zoom+"%",height:(100+l.cropTop+l.cropBottom)*l.zoom+"%",left:(-(l.cropLeft*l.zoom))+"%",top:(-(l.cropTop*l.zoom))+"%"};
     const cls="compositionLayer "+(l.id===selectedLayerId&&!program?"selected":"");
-    const common={className:cls,style,onPointerDown:(e:React.PointerEvent)=>!program&&beginDrag(e,l.id,"move"),onClick:(e:React.MouseEvent)=>{e.stopPropagation();if(!program)setSelectedLayerId(l.id)}};
+    const common={className:cls,style,onPointerDown:(e:React.PointerEvent)=>!program&&beginDrag(e,l.id,"move"),onWheel:(e:React.WheelEvent)=>!program&&handleEditorWheel(e),onClick:(e:React.MouseEvent)=>{e.stopPropagation();if(!program)setSelectedLayerId(l.id)}};
     if(l.kind==="text")return <div key={l.id} {...common}><span>{l.text||"TEXT"}</span>{!program&&l.id===selectedLayerId&&<>{["nw","n","ne","e","se","s","sw","w"].map(h=><i key={h} className={"resizeHandle h-"+h} onPointerDown={e=>beginHandle(e,l.id,h)}/>)}</>}</div>;
     if(!media)return <div key={l.id} {...common}><span className="missingLayer">Media missing</span></div>;
     const node=l.kind==="image"?<img style={mediaStyle} src={media.url} alt={media.name}/>:<video style={mediaStyle}
@@ -380,12 +393,12 @@ function Studio(p:{
     <div className="obsTopSimple">{screen(false)}<div className="takeColumn"><button className="cutButton" onClick={()=>{p.setTransition("cut");p.take()}}>CUT</button><button className="fadeButton" onClick={()=>{p.setTransition("fade");setFadePulse(true);setTimeout(()=>setFadePulse(false),500);p.take()}}>FADE</button><select value={p.transition} onChange={e=>p.setTransition(e.target.value as "cut"|"fade")}><option value="cut">Cut</option><option value="fade">Fade</option></select><small>Full Preview → Program</small></div>{screen(true)}</div>
 
     <div className="studioEditor">
-      <div className="editorCanvasPanel panel"><div className="title"><b>PREVIEW EDITOR</b><em>DRAG • RESIZE • LAYER</em></div><div className="editorHint">Edit only Preview. Add logos, images, text and video layers. Program stays unchanged until CUT or FADE.</div><div className="editorToolbar"><button onClick={()=>setCropMode(v=>!v)} className={cropMode?"active":""}>✂ {cropMode?"CROP MODE":"TRANSFORM"}</button><button onClick={()=>selected&&updateLayer(selected.id,{zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,rotation:0})}>RESET</button><button onClick={()=>selected&&updateLayer(selected.id,{x:0,y:0,width:100,height:100})}>FIT</button><button onClick={()=>selected&&updateLayer(selected.id,{x:5,y:5,width:90,height:90})}>FILL</button><label>CANVAS ZOOM <input type="range" min="60" max="160" value={canvasZoom} onChange={e=>setCanvasZoom(Number(e.target.value))}/><b>{canvasZoom}%</b></label></div>
+      <div className="editorCanvasPanel panel"><div className="title"><b>PREVIEW EDITOR</b><em>DRAG • RESIZE • LAYER</em></div><div className="editorHint">OBS-style canvas: drag a layer to move it • drag any blue handle to resize/zoom • Ctrl/Cmd + wheel to zoom • Alt/Option-drag to crop • use 👁 to show/hide and 🗑 to delete.</div><div className="editorToolbar"><button onClick={()=>setCropMode(v=>!v)} className={cropMode?"active":""}>✂ {cropMode?"CROP MODE":"TRANSFORM"}</button><button onClick={()=>selected&&updateLayer(selected.id,{zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,rotation:0})}>RESET</button><button onClick={()=>selected&&updateLayer(selected.id,{x:0,y:0,width:100,height:100})}>FIT</button><button onClick={()=>selected&&updateLayer(selected.id,{x:5,y:5,width:90,height:90})}>FILL</button><label>CANVAS ZOOM <input type="range" min="60" max="160" value={canvasZoom} onChange={e=>setCanvasZoom(Number(e.target.value))}/><b>{canvasZoom}%</b></label></div>
         <div className="editorCanvas" style={{padding:"8px",overflow:"auto"}}><div className="editorZoomViewport" style={{width:canvasZoom+"%",margin:"0 auto"}}><div className="composition editorComposition" ref={editorRef}>{!p.previewLayers.some(x=>x.id==="base")&&!p.previewWebUrl&&<span className="screenEmpty">SELECT MEDIA TO START</span>}{!p.previewLayers.some(x=>x.id==="base")&&p.previewWebUrl&&<iframe className="compositionWeb" src={p.previewWebUrl} title="Editor Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}{p.previewLayers.map(l=>renderLayer(l,false))}</div></div></div>
       </div>
       <div className="editorSide panel">
         <div className="title"><b>LAYERS</b><em>{p.previewLayers.length} LAYERS</em></div>
-        <div className="editorLayerList">{[...p.previewLayers].reverse().map(l=><button key={l.id} className={"editorLayerRow "+(selectedLayerId===l.id?"selected":"")} onClick={()=>setSelectedLayerId(l.id)}><button className="layerEye" title={l.visible?"Hide layer":"Show layer"} onClick={e=>{e.stopPropagation();updateLayer(l.id,{visible:!l.visible})}}>{l.visible?"◉":"○"}</button><span>{l.kind==="text"?"T":l.kind==="image"?"▧":"▶"}</span><b>{l.name}</b><small>{l.kind}</small><button className="layerLock" title={l.locked?"Unlock layer":"Lock layer"} onClick={e=>{e.stopPropagation();updateLayer(l.id,{locked:!l.locked})}}>{l.locked?"🔒":"🔓"}</button></button>)}</div>
+        <div className="editorLayerList">{[...p.previewLayers].reverse().map(l=><div key={l.id} className={"editorLayerRow "+(selectedLayerId===l.id?"selected":"")} onClick={()=>setSelectedLayerId(l.id)}><button className="layerEye" title={l.visible?"Hide layer":"Show layer"} aria-label={l.visible?"Hide layer":"Show layer"} onClick={e=>{e.stopPropagation();updateLayer(l.id,{visible:!l.visible})}}>{l.visible?"👁":"○"}</button><span>{l.kind==="text"?"T":l.kind==="image"?"▧":"▶"}</span><b title={l.name}>{l.name}</b><small>{l.kind}</small><button className="layerLock" title={l.locked?"Unlock layer":"Lock layer"} aria-label={l.locked?"Unlock layer":"Lock layer"} onClick={e=>{e.stopPropagation();updateLayer(l.id,{locked:!l.locked})}}>{l.locked?"🔒":"🔓"}</button><button className="layerDelete" title={l.id==="base"?"Base layer cannot be deleted":"Delete layer"} aria-label="Delete layer" disabled={l.id==="base"} onClick={e=>{e.stopPropagation();removeLayer(l.id)}}>🗑</button></div>)}</div>
         <div className="editorButtons"><button onClick={()=>{const f=p.mediaFiles.find(x=>x.type.startsWith("image/"));if(f)addLayer("image",f);else p.upload()}}>＋ Logo / Image</button><button onClick={()=>{const f=p.mediaFiles.find(x=>x.type.startsWith("video/"));if(f)addLayer("video",f);else p.upload()}}>＋ Video Layer</button><button onClick={()=>addLayer("text")}>＋ Text / Lower Third</button></div>
         {selected&&<div className="properties"><div className="propTitle">SELECTED: {selected.name}</div><label>X <input type="number" min="0" max="100" value={Math.round(selected.x)} onChange={e=>updateLayer(selected.id,{x:Number(e.target.value)})}/></label><label>Y <input type="number" min="0" max="100" value={Math.round(selected.y)} onChange={e=>updateLayer(selected.id,{y:Number(e.target.value)})}/></label><label>W <input type="number" min="5" max="100" value={Math.round(selected.width)} onChange={e=>updateLayer(selected.id,{width:Number(e.target.value)})}/></label><label>H <input type="number" min="5" max="100" value={Math.round(selected.height)} onChange={e=>updateLayer(selected.id,{height:Number(e.target.value)})}/></label><label>Opacity <input type="range" min="0.1" max="1" step=".05" value={selected.opacity} onChange={e=>updateLayer(selected.id,{opacity:Number(e.target.value)})}/></label><label>Zoom <input type="range" min="0.5" max="3" step=".05" value={selected.zoom} onChange={e=>updateLayer(selected.id,{zoom:Number(e.target.value)})}/></label><label>Crop Top <input type="number" min="0" max="80" value={selected.cropTop} onChange={e=>updateLayer(selected.id,{cropTop:Number(e.target.value)})}/></label><label>Crop Right <input type="number" min="0" max="80" value={selected.cropRight} onChange={e=>updateLayer(selected.id,{cropRight:Number(e.target.value)})}/></label><label>Crop Bottom <input type="number" min="0" max="80" value={selected.cropBottom} onChange={e=>updateLayer(selected.id,{cropBottom:Number(e.target.value)})}/></label><label>Crop Left <input type="number" min="0" max="80" value={selected.cropLeft} onChange={e=>updateLayer(selected.id,{cropLeft:Number(e.target.value)})}/></label><label>Rotation <input type="range" min="-180" max="180" value={selected.rotation} onChange={e=>updateLayer(selected.id,{rotation:Number(e.target.value)})}/></label>{selected.kind==="text"&&<label>Text <input value={selected.text||""} onChange={e=>updateLayer(selected.id,{text:e.target.value})}/></label>}<div className="propertyActions"><button onClick={()=>reorder(selected.id,1)}>↑ Forward</button><button onClick={()=>reorder(selected.id,-1)}>↓ Back</button><button onClick={()=>duplicateLayer(selected.id)}>Duplicate</button><button onClick={()=>updateLayer(selected.id,{locked:!selected.locked})}>{selected.locked?"Unlock":"Lock"}</button><button className="removeLayerBtn" onClick={()=>removeLayer(selected.id)}>Delete</button></div></div>}
         <div className="editorMedia"><div className="propTitle">MEDIA FOR LAYERS</div><div className="editorMediaList">{p.mediaFiles.length?p.mediaFiles.map(f=><button key={f.id} onClick={()=>addLayer(f.type.startsWith("image/")?"image":"video",f)}><span>{f.type.startsWith("image/")?"▧":"▶"}</span>{f.name}</button>):<small>No uploaded media yet.</small>}</div></div>

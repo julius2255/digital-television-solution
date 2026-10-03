@@ -11,7 +11,7 @@ const youtubeEmbedUrl=(value:string)=>{
     let id="";
     if(u.hostname==="youtu.be") id=u.pathname.replace(/^\//,"").split("/")[0];
     else if(u.hostname.includes("youtube.com")){
-      id=u.searchParams.get("v")||u.pathname.match(/\\/(?:embed|shorts|live)\\/([^/?]+)/)?.[1]||"";
+      id=u.searchParams.get("v")||u.pathname.split("/").filter(Boolean)[1]||"";
     }
     return id ? `https://www.youtube.com/embed/${id}?enablejsapi=1&playsinline=1&controls=1&rel=0` : "";
   }catch{return ""}

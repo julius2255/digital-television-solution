@@ -5,6 +5,19 @@ type Section="studio"|"playlist"|"schedule"|"news"|"media"|"streaming"|"analytic
 type MediaFile={id:string;name:string;type:string;url:string;size:number};
 type Scene={id:string;name:string};
 type Source={id:string;name:string;kind:string;mediaId?:string;url?:string;visible:boolean};
+const youtubeEmbedUrl=(value:string)=>{
+  try{
+    const u=new URL(value);
+    let id="";
+    if(u.hostname==="youtu.be") id=u.pathname.replace(/^\//,"").split("/")[0];
+    else if(u.hostname.includes("youtube.com")){
+      id=u.searchParams.get("v")||u.pathname.match(/\\/(?:embed|shorts|live)\\/([^/?]+)/)?.[1]||"";
+    }
+    return id ? `https://www.youtube.com/embed/${id}?enablejsapi=1&playsinline=1&controls=1&rel=0` : "";
+  }catch{return ""}
+};
+const isYoutubeEmbed=(value:string)=>value.includes("youtube.com/embed/");
+
 
 const tabs:[Section,string,string][]=[
   ["studio","▣","Studio"],["playlist","☷","Playlist"],["schedule","▣","Schedule"],
@@ -109,10 +122,12 @@ export default function Home(){
   };
 
   const addWebSource=()=>{
-    const url=prompt("Web page URL","https://");
+    const url=prompt("Web page or YouTube URL","https://");
     if(!url?.trim())return;
-    const source={id:String(Date.now()),name:"Web Browser",kind:"Web",url:url.trim(),visible:true};
-    setSources(v=>[...v,source]);setActiveSource(source.id);setPreviewMediaId("");setPreviewWebUrl(url.trim());setPreviewPlaying(false);notify("Web page loaded into Preview");
+    const raw=url.trim();
+    const embed=youtubeEmbedUrl(raw);
+    const source={id:String(Date.now()),name:embed?"YouTube":"Web Browser",kind:"Web",url:embed||raw,visible:true};
+    setSources(v=>[...v,source]);setActiveSource(source.id);setPreviewMediaId("");setPreviewWebUrl(embed||raw);setPreviewPlaying(false);notify(embed?"YouTube video loaded into Preview":"Web page loaded into Preview");
   };
 
   const take=(mode:"cut"|"fade"=transition,time=0)=>{
@@ -121,7 +136,7 @@ export default function Home(){
       return;
     }
     setProgramMediaId(previewMedia?.id||"");
-    setProgramWebUrl(previewWebUrl);
+    setProgramWebUrl(youtubeEmbedUrl(previewWebUrl)||previewWebUrl);
     setProgramPlaying(previewWebUrl?true:previewPlaying);
     setProgramTime(time);
     setTransition(mode);
@@ -129,14 +144,24 @@ export default function Home(){
   };
 
   const togglePreview=()=>{
-    if(previewWebUrl){notify("Web preview is loaded. Use CUT or FADE to send it to Program.");return}
+    if(previewWebUrl){
+      if(isYoutubeEmbed(previewWebUrl)){setPreviewPlaying(v=>!v);return}
+      notify("This web page is loaded in Preview. Use CUT or FADE to send it to Program.");return
+    }
     if(!previewMedia){notify("Select a video, image or audio item first");return}
     if(previewMedia.type.startsWith("image/")){notify("Image is already visible in Preview");return}
     setPreviewPlaying(v=>!v);
   };
 
   const stopPreview=()=>{setPreviewPlaying(false);setPreviewTime(0);setPreviewWebUrl("")};
-  const toggleProgram=()=>{if(!programMedia){notify("No video is currently on Program");return}setProgramPlaying(v=>!v)};
+  const toggleProgram=()=>{
+    if(programWebUrl){
+      if(isYoutubeEmbed(programWebUrl)){setProgramPlaying(v=>!v);return}
+      notify("Generic web pages cannot be paused from the control room; YouTube sources can.");return
+    }
+    if(!programMedia){notify("No video is currently on Program");return}
+    setProgramPlaying(v=>!v)
+  };
   const toggleLive=()=>{setLive(v=>!v);notify(live?"Broadcast stopped":"Broadcast is ON AIR")};
 
   const addProgramme=()=>{
@@ -190,6 +215,8 @@ function Studio(p:{
 }){
   const previewRef=useRef<HTMLVideoElement>(null);
   const programRef=useRef<HTMLVideoElement>(null);
+  const previewWebRef=useRef<HTMLIFrameElement>(null);
+  const programWebRef=useRef<HTMLIFrameElement>(null);
   const [previewClock,setPreviewClock]=useState(0);
   const [programClock,setProgramClock]=useState(0);
   const [fadePulse,setFadePulse]=useState(false);
@@ -210,13 +237,18 @@ function Studio(p:{
   },[p.programPlaying,p.program?.id]);
 
   const fmt=(s:number)=>String(Math.floor(s/60)).padStart(2,"0")+":"+String(Math.floor(s%60)).padStart(2,"0");
+  const controlYouTube=(ref:React.RefObject<HTMLIFrameElement|null>,action:"playVideo"|"pauseVideo")=>{
+    ref.current?.contentWindow?.postMessage(JSON.stringify({event:"command",func:action,args:[]}),"*");
+  };
+  useEffect(()=>{if(p.previewWebUrl&&isYoutubeEmbed(p.previewWebUrl))controlYouTube(previewWebRef,p.previewPlaying?"playVideo":"pauseVideo")},[p.previewPlaying,p.previewWebUrl]);
+  useEffect(()=>{if(p.programWebUrl&&isYoutubeEmbed(p.programWebUrl))controlYouTube(programWebRef,p.programPlaying?"playVideo":"pauseVideo")},[p.programPlaying,p.programWebUrl]);
 
   const screen=(file:MediaFile|null,preview:boolean)=>(
     <div className="screenWrap">
       <div className="screenLabel"><b>{preview?"PREVIEW":"PROGRAM"}</b><span>{preview?(p.previewPlaying?"PLAYING":"READY"):(p.programPlaying?"LIVE":"STANDBY")}</span></div>
       <div className="screen">
         {!file&&!(preview?p.previewWebUrl:p.programWebUrl)&&<span className="screenEmpty">{preview?"SELECT A MEDIA ITEM":"PROGRAM STANDBY"}</span>}
-        {(preview?p.previewWebUrl:p.programWebUrl)&&<iframe className="webFrame" src={preview?p.previewWebUrl:p.programWebUrl} title={preview?"Web Preview":"Live Web Source"} />}
+        {(preview?p.previewWebUrl:p.programWebUrl)&&<iframe ref={preview?previewWebRef:programWebRef} className="webFrame" src={preview?p.previewWebUrl:p.programWebUrl} title={preview?"Web Preview":"Live Web Source"} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />}
         {file?.type.startsWith("video/")&&<video
           ref={preview?previewRef:programRef} key={file.id} src={file.url} muted={p.muted} preload="auto" playsInline
           onTimeUpdate={e=>{preview?setPreviewClock(e.currentTarget.currentTime):setProgramClock(e.currentTarget.currentTime)}}

@@ -68,7 +68,7 @@ export default function Home(){
   const [transition,setTransition]=useState<"cut"|"fade">("cut");
   const [toast,setToast]=useState("");
   const [connected,setConnected]=useState<Record<string,boolean>>({YouTube:false,Facebook:false,TikTok:false,"Custom RTMP":false});
-  const [schedule,setSchedule]=useState(seedSchedule);
+  const [schedule,setSchedule]=useState<string[][]>(seedSchedule);
   const fileInputRef=useRef<HTMLInputElement>(null);
 
   const notify=(message:string)=>{setToast(message);setTimeout(()=>setToast(""),2200)};
@@ -164,6 +164,8 @@ export default function Home(){
   };
   const toggleLive=()=>{setLive(v=>!v);notify(live?"Broadcast stopped":"Broadcast is ON AIR")};
 
+  const playMedia=(id:string)=>{setPreviewMediaId(id);setPreviewWebUrl("");setPreviewTime(0);setPreviewPlaying(true);setActiveSource("media");const file=mediaFiles.find(x=>x.id===id);if(file)notify(file.name+" started in Preview")};
+
   const addProgramme=()=>{
     const name=prompt("Programme name","New Programme");
     if(!name?.trim())return;
@@ -189,7 +191,7 @@ export default function Home(){
         toggleProgram={toggleProgram} take={take} transition={transition} setTransition={setTransition} live={live} toggleLive={toggleLive}
         scenes={scenes} activeScene={activeScene} setActiveScene={setActiveScene} addScene={addScene}
         sources={sources} activeSource={activeSource} setActiveSource={setActiveSource} addSource={addSource} addWebSource={addWebSource}
-        mediaFiles={mediaFiles} selectMedia={selectMedia} selectWeb={(url)=>{setPreviewMediaId("");setPreviewWebUrl(url);setPreviewPlaying(false);notify("Web page loaded into Preview")}} upload={()=>fileInputRef.current?.click()}
+        mediaFiles={mediaFiles} selectMedia={selectMedia} playMedia={playMedia} selectWeb={(url)=>{setPreviewMediaId("");setPreviewWebUrl(url);setPreviewPlaying(false);notify("Web page loaded into Preview")}} upload={()=>fileInputRef.current?.click()}
       />}
       {section==="playlist"&&<Playlist mediaFiles={mediaFiles} previewMediaId={previewMediaId} selectMedia={selectMedia} remove={removeMedia} upload={()=>fileInputRef.current?.click()}/>}
       {section==="schedule"&&<Schedule rows={schedule} add={addProgramme}/>}
@@ -211,7 +213,7 @@ function Studio(p:{
   togglePreview:()=>void;stopPreview:()=>void;toggleProgram:()=>void;take:(mode?:"cut"|"fade",time?:number)=>void;transition:"cut"|"fade";setTransition:(v:"cut"|"fade")=>void;
   live:boolean;toggleLive:()=>void;scenes:Scene[];activeScene:string;setActiveScene:(v:string)=>void;addScene:()=>void;
   sources:Source[];activeSource:string;setActiveSource:(v:string)=>void;addSource:()=>void;addWebSource:()=>void;
-  mediaFiles:MediaFile[];selectMedia:(id:string)=>void;selectWeb:(url:string)=>void;upload:()=>void;
+  mediaFiles:MediaFile[];selectMedia:(id:string)=>void;playMedia:(id:string)=>void;selectWeb:(url:string)=>void;upload:()=>void;
 }){
   const previewRef=useRef<HTMLVideoElement>(null);
   const programRef=useRef<HTMLVideoElement>(null);
@@ -309,15 +311,15 @@ function Studio(p:{
     <div className="lowerStudio">
       <div className="panel">
         <div className="title"><b>PLAYLIST / RUN ORDER</b><em>{p.mediaFiles.length} MEDIA</em></div>
-        <div className="playlist">{p.mediaFiles.length===0?<div className="empty">Your playlist is empty.</div>:p.mediaFiles.map((f,i)=><div className="playlistRow" key={f.id}><strong>{i+1}</strong><span>{f.type.startsWith("video/")?"▶":"♫"}</span><b>{f.name}</b><small>{(f.size/1024/1024).toFixed(1)} MB</small><button onClick={()=>p.selectMedia(f.id)}>Preview</button><button onClick={()=>p.selectMedia(f.id)}>▶</button></div>)}</div>
+        <div className="playlist">{p.mediaFiles.length===0?<div className="empty">Your playlist is empty.</div>:p.mediaFiles.map((f,i)=><div className="playlistRow" key={f.id}><strong>{i+1}</strong><span>{f.type.startsWith("video/")?"▶":"♫"}</span><b>{f.name}</b><small>{(f.size/1024/1024).toFixed(1)} MB</small><button onClick={()=>p.selectMedia(f.id)}>Preview</button><button onClick={()=>p.playMedia(f.id)}>▶</button></div>)}</div>
       </div>
       <div className="panel programInfoPanel"><div className="title"><b>PROGRAM INFO</b></div><div className="programInfo"><span>NOW PLAYING</span><b>{p.program?.name||"Standby"}</b><small>{p.program?(p.programPlaying?"● Playing":"Stopped"):"No programme on Program"}</small></div><p className="muted">Selecting or adding another video only changes Preview. Program stays untouched until CUT or FADE.</p></div>
     </div>
   </div>
 }
 
-function Playlist({mediaFiles,previewMediaId,selectMedia,remove,upload}:{mediaFiles:MediaFile[];previewMediaId:string;selectMedia:(id:string)=>void;remove:(id:string)=>void;upload:()=>void}){
-  return <div className="panel full"><div className="title"><b>PLAYLIST / RUN ORDER</b><button onClick={upload}>＋ Add Media</button></div><div className="playlist">{mediaFiles.length===0?<div className="empty">Upload videos to build the run order.</div>:mediaFiles.map((f,i)=><div className="playlistRow" key={f.id}><strong>{i+1}</strong><span>{f.type.startsWith("video/")?"▶":"♫"}</span><b>{f.name}</b><small>{(f.size/1024/1024).toFixed(1)} MB</small><button onClick={()=>selectMedia(f.id)}>{previewMediaId===f.id?"Selected":"Preview"}</button><button onClick={()=>remove(f.id)}>×</button></div>)}</div></div>
+function Playlist({mediaFiles,previewMediaId,selectMedia,playMedia,remove,upload}:{mediaFiles:MediaFile[];previewMediaId:string;selectMedia:(id:string)=>void;playMedia:(id:string)=>void;remove:(id:string)=>void;upload:()=>void}){
+  return <div className="panel full"><div className="title"><b>PLAYLIST / RUN ORDER</b><button onClick={upload}>＋ Add Media</button></div><div className="playlist">{mediaFiles.length===0?<div className="empty">Upload videos to build the run order.</div>:mediaFiles.map((f,i)=><div className="playlistRow" key={f.id}><strong>{i+1}</strong><span>{f.type.startsWith("video/")?"▶":"♫"}</span><b>{f.name}</b><small>{(f.size/1024/1024).toFixed(1)} MB</small><button onClick={()=>selectMedia(f.id)}>{previewMediaId===f.id?"Selected":"Preview"}</button><button onClick={()=>playMedia(f.id)}>▶ Play</button><button onClick={()=>remove(f.id)}>×</button></div>)}</div></div>
 }
 
 function Media({files,selected,select,remove,upload}:{files:MediaFile[];selected:string;select:(id:string)=>void;remove:(id:string)=>void;upload:()=>void}){

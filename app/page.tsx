@@ -1,17 +1,33 @@
 "use client";
 
 import {useEffect,useRef,useState} from "react";
+import type {RefObject} from "react";
 
-type Section="studio"|"schedule"|"news"|"media"|"streaming"|"analytics"|"audience"|"settings";
+type Section="studio"|"playlist"|"schedule"|"news"|"media"|"streaming"|"analytics"|"settings";
+type MediaFile={id:string;name:string;type:string;url:string;size:number};
+type Scene={id:string;name:string};
+type Source={id:string;name:string;kind:string;mediaId?:string;url?:string;visible:boolean};
 
-const sections:[Section,string,string][]=[
-  ["studio","🎬","Live Studio"],["schedule","📅","TV Schedule"],["news","📰","Auto News"],
-  ["media","🎞","Media Library"],["streaming","📡","Streaming"],["analytics","📊","Analytics"],
-  ["audience","👥","Audience & Sharing"],["settings","⚙","Settings"]
+const tabs:[Section,string,string][]=[
+  ["studio","▣","Studio"],["playlist","☷","Playlist"],["schedule","▣","Schedule"],
+  ["news","▤","Auto News"],["media","▧","Media"],["streaming","◉","Streaming"],
+  ["analytics","▥","Analytics"],["settings","⚙","Settings"]
 ];
 
-type Layer={id:string;name:string;kind:string;url?:string;type?:string;visible:boolean};
-type MediaFile={id:string;name:string;type:string;url:string;size:number};
+const initialScenes:Scene[]=[
+  {id:"main",name:"Main"},{id:"classroom",name:"Classroom"},{id:"sports",name:"Sports"},
+  {id:"news",name:"News"},{id:"events",name:"Events"}
+];
+
+const initialSources:Source[]=[
+  {id:"camera",name:"Camera",kind:"Camera",visible:true},
+  {id:"video",name:"Video",kind:"Video",visible:true},
+  {id:"image",name:"Image",kind:"Image",visible:true},
+  {id:"audio",name:"Audio",kind:"Audio",visible:true},
+  {id:"web",name:"Web Browser",kind:"Web",visible:true},
+  {id:"text",name:"Text",kind:"Text",visible:true},
+  {id:"media",name:"Media File",kind:"Media",visible:true}
+];
 
 const seedSchedule=[
   ["07:00","Morning Jolly Show","Camera"],["10:00","Morning News","Auto News"],
@@ -23,88 +39,259 @@ const seedSchedule=[
 export default function Home(){
   const [section,setSection]=useState<Section>("studio");
   const [live,setLive]=useState(false);
-  const [scene,setScene]=useState("Live Camera");
-  const [scenes,setScenes]=useState(["Live Camera","Auto News","Advertisement","Movie","Standby"]);
-  const [schedule,setSchedule]=useState(seedSchedule);
+  const [scenes,setScenes]=useState<Scene[]>(initialScenes);
+  const [activeScene,setActiveScene]=useState("main");
+  const [sources,setSources]=useState<Source[]>(initialSources);
+  const [activeSource,setActiveSource]=useState("video");
+  const [mediaFiles,setMediaFiles]=useState<MediaFile[]>([]);
+  const [previewMediaId,setPreviewMediaId]=useState("");
+  const [programMediaId,setProgramMediaId]=useState("");
+  const [previewPlaying,setPreviewPlaying]=useState(false);
+  const [programPlaying,setProgramPlaying]=useState(false);
+  const [previewTime,setPreviewTime]=useState(0);
+  const [programTime,setProgramTime]=useState(0);
+  const [volume,setVolume]=useState(1);
+  const [muted,setMuted]=useState(false);
+  const [transition,setTransition]=useState<"cut"|"fade">("cut");
   const [toast,setToast]=useState("");
   const [connected,setConnected]=useState<Record<string,boolean>>({YouTube:false,Facebook:false,TikTok:false,"Custom RTMP":false});
-  const [source,setSource]=useState("Camera");
-  const [playing,setPlaying]=useState(false);
-  const [elapsed,setElapsed]=useState("00:00:00");
-  const [mediaFiles,setMediaFiles]=useState<{id:string;name:string;type:string;url:string;size:number}[]>([]);
-  const [selectedMedia,setSelectedMedia]=useState("");
-  const [layers,setLayers]=useState<Layer[]>([{id:"camera-base",name:"Live Camera",kind:"Camera",visible:true}]);
-  const [selectedLayer,setSelectedLayer]=useState("camera-base");
-  const [programLayers,setProgramLayers]=useState<Layer[]>([{id:"camera-base",name:"Live Camera",kind:"Camera",visible:true}]);
+  const [schedule,setSchedule]=useState(seedSchedule);
   const fileInputRef=useRef<HTMLInputElement>(null);
-  useEffect(()=>{if(!playing)return;const timer=setInterval(()=>setElapsed(v=>{const p=v.split(":").map(Number);let s=p[0]*3600+p[1]*60+p[2]+1;return [Math.floor(s/3600),Math.floor((s%3600)/60),s%60].map(n=>String(n).padStart(2,"0")).join(":")}),1000);return()=>clearInterval(timer)},[playing]);
+
+  const notify=(message:string)=>{setToast(message);setTimeout(()=>setToast(""),2200)};
+  const previewMedia=mediaFiles.find(f=>f.id===previewMediaId)||null;
+  const programMedia=mediaFiles.find(f=>f.id===programMediaId)||null;
+
   useEffect(()=>()=>mediaFiles.forEach(f=>URL.revokeObjectURL(f.url)),[mediaFiles]);
 
-  const notify=(m:string)=>{setToast(m);setTimeout(()=>setToast(""),2500)};
-  const toggleLive=()=>{setLive(v=>!v);notify(live?"Broadcast stopped":"Studio is ON AIR")};
-  const addScene=()=>{const n=prompt("New scene name");if(n?.trim()){setScenes(v=>[...v,n.trim()]);setScene(n.trim());notify("Scene created")}};
-  const addProgramme=()=>{const n=prompt("Programme name");if(!n?.trim())return;const t=prompt("Start time (HH:MM)","12:00")||"12:00";setSchedule(v=>[...v,[t,n.trim(),"Video"]].sort((a,b)=>a[0].localeCompare(b[0])));notify("Programme added")};
-  const upload=()=>fileInputRef.current?.click();
-  const handleFiles=(files:FileList|null)=>{if(!files)return;const incoming=Array.from(files).map((file,i)=>({id:String(Date.now())+"-"+i,name:file.name,type:file.type||"file",url:URL.createObjectURL(file),size:file.size}));setMediaFiles(v=>[...v,...incoming]);if(incoming[0]){setSelectedMedia(incoming[0].id);selectSource(incoming[0].type.startsWith("image/")?"Image":incoming[0].type.startsWith("audio/")?"Microphone":"Video")}notify(incoming.length+" media file"+(incoming.length===1?"":"s")+" added")};
-  const selectMedia=(id:string)=>{const f=mediaFiles.find(x=>x.id===id);if(!f)return;setSelectedMedia(id);selectSource(f.type.startsWith("image/")?"Image":f.type.startsWith("audio/")?"Microphone":"Video");notify(f.name+" ready in Preview — Program continues")};
-  const removeMedia=(id:string)=>{setMediaFiles(v=>{const f=v.find(x=>x.id===id);if(f)URL.revokeObjectURL(f.url);return v.filter(x=>x.id!==id)});if(selectedMedia===id)setSelectedMedia("");notify("Media removed")};
-  const toggleDestination=(n:string)=>{setConnected(v=>({...v,[n]:!v[n]}));notify((connected[n]?"Disconnected ":"Connected ")+n)};
-  const selectSource=(n:string)=>{setSource(n);notify(n+" source selected")};
-  const togglePlayback=()=>{setPlaying(v=>!v);notify(playing?"Playback paused":"Playback started")};
-  const resetPlayback=()=>{setPlaying(false);setElapsed("00:00:00");notify("Playback reset")};
-  const addLayer=()=>{const f=mediaFiles.find(x=>x.id===selectedMedia);const kind=f?(f.type.startsWith("image/")?"Image":f.type.startsWith("audio/")?"Audio":"Video"):source;const layer:Layer={id:String(Date.now()),name:f?.name||kind,kind,url:f?.url,type:f?.type,visible:true};setLayers(v=>[...v,layer]);setSelectedLayer(layer.id);notify(layer.name+" added as layer")};
-  const addTextLayer=()=>{const t=prompt("Text to add to preview","DIGITAL TELEVISION");if(t?.trim()){const layer:Layer={id:String(Date.now()),name:t.trim(),kind:"Text",visible:true};setLayers(v=>[...v,layer]);setSelectedLayer(layer.id);notify("Text layer added")}};
-  const removeLayer=(id:string)=>{if(id==="camera-base")return;setLayers(v=>v.filter(x=>x.id!==id));if(selectedLayer===id)setSelectedLayer("camera-base");notify("Layer removed")};
-  const toggleLayer=(id:string)=>setLayers(v=>v.map(x=>x.id===id?{...x,visible:!x.visible}:x));
-  const cutToProgram=()=>{setProgramLayers(layers.filter(x=>x.visible));notify("Preview sent to Program")};
+  const addFiles=(files:FileList|null)=>{
+    if(!files)return;
+    const incoming=Array.from(files).map((file,i)=>({
+      id:String(Date.now())+"-"+i,name:file.name,type:file.type||"application/octet-stream",
+      url:URL.createObjectURL(file),size:file.size
+    }));
+    setMediaFiles(v=>[...v,...incoming]);
+    if(incoming[0]){
+      setPreviewMediaId(incoming[0].id);
+      setPreviewPlaying(false);
+      setActiveSource(incoming[0].type.startsWith("audio/")?"audio":incoming[0].type.startsWith("image/")?"image":"video");
+      notify(incoming[0].name+" loaded into Preview");
+    }
+  };
+
+  const selectMedia=(id:string)=>{
+    setPreviewMediaId(id);
+    setPreviewPlaying(false);
+    setPreviewTime(0);
+    setActiveSource("media");
+    const file=mediaFiles.find(x=>x.id===id);
+    if(file)notify(file.name+" is ready in Preview — Program is unchanged");
+  };
+
+  const removeMedia=(id:string)=>{
+    const f=mediaFiles.find(x=>x.id===id);
+    if(f)URL.revokeObjectURL(f.url);
+    setMediaFiles(v=>v.filter(x=>x.id!==id));
+    if(previewMediaId===id){setPreviewMediaId("");setPreviewPlaying(false)}
+    notify("Media removed");
+  };
+
+  const addScene=()=>{
+    const name=prompt("Scene name","New Scene");
+    if(!name?.trim())return;
+    const scene={id:String(Date.now()),name:name.trim()};
+    setScenes(v=>[...v,scene]);setActiveScene(scene.id);notify("Scene added");
+  };
+
+  const addSource=()=>{
+    const name=prompt("Source name","New Source");
+    if(!name?.trim())return;
+    const source={id:String(Date.now()),name:name.trim(),kind:"Custom",visible:true};
+    setSources(v=>[...v,source]);setActiveSource(source.id);notify("Source added");
+  };
+
+  const addWebSource=()=>{
+    const url=prompt("Web page URL","https://");
+    if(!url?.trim())return;
+    const source={id:String(Date.now()),name:"Web Browser",kind:"Web",url:url.trim(),visible:true};
+    setSources(v=>[...v,source]);setActiveSource(source.id);notify("Web source added to Preview");
+  };
+
+  const take=()=>{
+    if(!previewMedia){
+      notify("Select and play a media item in Preview first");
+      return;
+    }
+    setProgramMediaId(previewMedia.id);
+    setProgramPlaying(previewPlaying);
+    setProgramTime(previewTime);
+    notify(transition==="fade"?"FADE to Program":"CUT to Program");
+  };
+
+  const togglePreview=()=>{
+    if(!previewMedia){notify("Select a video, image or audio item first");return}
+    if(previewMedia.type.startsWith("image/")){notify("Image is already visible in Preview");return}
+    setPreviewPlaying(v=>!v);
+  };
+
+  const stopPreview=()=>{setPreviewPlaying(false);setPreviewTime(0)};
+  const toggleLive=()=>{setLive(v=>!v);notify(live?"Broadcast stopped":"Broadcast is ON AIR")};
+
+  const addProgramme=()=>{
+    const name=prompt("Programme name","New Programme");
+    if(!name?.trim())return;
+    const time=prompt("Start time (HH:MM)","12:00")||"12:00";
+    setSchedule(v=>[...v,[time,name.trim(),"Video"]].sort((a,b)=>a[0].localeCompare(b[0])));
+    notify("Programme added");
+  };
 
   return <main className="appOne">
-    <header className="topbar"><div className="brand"><div className="logo">DTV</div><div><b>DIGITAL TELEVISION SOLUTION</b><small>Broadcast Control Room</small></div></div><div className={"air "+(live?"on":"")}><i/> {live?"ON AIR":"STANDBY"}</div><div className="actions"><span>● System Ready</span><button className="go" onClick={toggleLive}>{live?"STOP LIVE":"GO LIVE"}</button></div></header>
-    <nav className="workTabs">{sections.map(([id,icon,label])=><button key={id} className={section===id?"workTab active":"workTab"} onClick={()=>setSection(id)}><span>{icon}</span>{label.replace("Live ","")}</button>)}</nav>
+    <header className="topbar">
+      <div className="brand"><div className="logo">DTV</div><div><b>DIGITAL TELEVISION SOLUTION</b><small>Broadcast Control Room</small></div></div>
+      <div className={"air "+(live?"on":"")}><i/> {live?"ON AIR":"STANDBY"}</div>
+      <div className="actions"><span>● System Ready</span><button className="go" onClick={toggleLive}>{live?"STOP LIVE":"GO LIVE"}</button></div>
+    </header>
+
+    <nav className="workTabs">{tabs.map(([id,icon,label])=><button key={id} className={"workTab "+(section===id?"active":"")} onClick={()=>setSection(id)}><span>{icon}</span>{label}</button>)}</nav>
+
     <section className="workspace">
-      {section==="studio"&&<Studio live={live} toggleLive={toggleLive} playing={playing} togglePlayback={togglePlayback} resetPlayback={resetPlayback} elapsed={elapsed} selectedMedia={mediaFiles.find(f=>f.id===selectedMedia)||null} layers={layers} programLayers={programLayers} addLayer={addLayer} addTextLayer={addTextLayer} removeLayer={removeLayer} toggleLayer={toggleLayer} cutToProgram={cutToProgram}/>}
+      {section==="studio"&&<Studio
+        preview={previewMedia} program={programMedia} previewPlaying={previewPlaying} programPlaying={programPlaying}
+        previewTime={previewTime} programTime={programTime} volume={volume} muted={muted}
+        setVolume={setVolume} setMuted={setMuted} togglePreview={togglePreview} stopPreview={stopPreview}
+        take={take} transition={transition} setTransition={setTransition} live={live} toggleLive={toggleLive}
+        scenes={scenes} activeScene={activeScene} setActiveScene={setActiveScene} addScene={addScene}
+        sources={sources} activeSource={activeSource} setActiveSource={setActiveSource} addSource={addSource} addWebSource={addWebSource}
+        mediaFiles={mediaFiles} selectMedia={selectMedia} upload={()=>fileInputRef.current?.click()}
+      />}
+      {section==="playlist"&&<Playlist mediaFiles={mediaFiles} previewMediaId={previewMediaId} selectMedia={selectMedia} remove={removeMedia} upload={()=>fileInputRef.current?.click()}/>}
       {section==="schedule"&&<Schedule rows={schedule} add={addProgramme}/>}
       {section==="news"&&<News notify={notify}/>}
-      {section==="media"&&<Media upload={upload} files={mediaFiles} selected={selectedMedia} select={selectMedia} remove={removeMedia} fileInputRef={fileInputRef} onFiles={handleFiles}/>}
-      {section==="streaming"&&<Streaming connected={connected} toggle={toggleDestination} live={live}/>}
-      {section==="analytics"&&<Analytics live={live}/>}
-      {section==="audience"&&<Audience notify={notify}/>}
+      {section==="media"&&<Media files={mediaFiles} selected={previewMediaId} select={selectMedia} remove={removeMedia} upload={()=>fileInputRef.current?.click()}/>}
+      {section==="streaming"&&<Streaming connected={connected} setConnected={setConnected} live={live}/>}
+      {section==="analytics"&&<Analytics live={live} program={programMedia}/>}
       {section==="settings"&&<Settings notify={notify}/>}
     </section>
+
+    <input ref={fileInputRef} type="file" multiple accept="video/*,image/*,audio/*" hidden onChange={e=>{addFiles(e.target.files);e.currentTarget.value=""}}/>
     {toast&&<div className="toast">{toast}</div>}
   </main>
 }
 
-function Studio({live,toggleLive,playing,togglePlayback,resetPlayback,elapsed,selectedMedia,layers,programLayers,addLayer,addTextLayer,removeLayer,toggleLayer,cutToProgram}:{live:boolean;toggleLive:()=>void;playing:boolean;togglePlayback:()=>void;resetPlayback:()=>void;elapsed:string;selectedMedia:MediaFile|null;layers:Layer[];programLayers:Layer[];addLayer:()=>void;addTextLayer:()=>void;removeLayer:(x:string)=>void;toggleLayer:(x:string)=>void;cutToProgram:()=>void}){
-  const [volume,setVolume]=useState(1);
-  const [muted,setMuted]=useState(false);
-  const videoRef=useRef<HTMLVideoElement>(null);
-  useEffect(()=>{if(videoRef.current)videoRef.current.volume=volume},[volume,selectedMedia?.id]);
-  const media=selectedMedia;
-  const render=(file:MediaFile|null,label:string,program=false)=><div className="screenWrap"><div className="screenLabel">{label}{!program&&<span>READY</span>}</div><div className="screen">{file?.type.startsWith("video/")?<video ref={!program?videoRef:undefined} key={file.id} src={file.url} autoPlay={program&&playing} muted={muted} controls={false} loop preload="auto" playsInline/>:file?.type.startsWith("image/")?<img src={file.url} alt={file.name}/>:file?.type.startsWith("audio/")?<audio src={file.url} autoPlay={program&&playing} controls preload="auto"/>:<span className="screenEmpty">{program?"PROGRAM STANDBY":"SELECT A MEDIA ITEM"}</span>}{program&&playing&&<div className="liveBadge">LIVE • {elapsed}</div>}</div></div>;
-  return <div className="studioSimple">
-    <div className="studioTitle"><div><small>OBS-STYLE CONTROL ROOM</small><h1>Studio</h1></div><div className="studioActions"><button onClick={togglePlayback}>{playing?"Ⅱ PAUSE":"▶ PLAY"}</button><button onClick={resetPlayback}>⏹ STOP</button><button className={live?"danger take":"take"} onClick={toggleLive}>{live?"■ STOP LIVE":"● GO LIVE"}</button></div></div>
-    <div className="obsTopSimple">{render(media,"PREVIEW")}{<div className="takeColumn"><button onClick={cutToProgram}>TAKE →</button><small>Preview becomes Program instantly</small></div>}{render(programLayers.find(x=>x.visible&&x.url)?.url?{id:programLayers.find(x=>x.visible&&x.url)!.id,name:programLayers.find(x=>x.visible&&x.url)!.name,type:programLayers.find(x=>x.visible&&x.url)!.type||"video/mp4",url:programLayers.find(x=>x.visible&&x.url)!.url!,size:0}:null,"PROGRAM",true)}</div>
-    <div className="obsBarSimple">
-      <div className="panel compact"><div className="title"><b>MEDIA / NEXT</b><em>{media?"READY":"NONE"}</em></div><p className="muted">{media?media.name:"Choose a video from Media Library."}</p><button className="big" onClick={cutToProgram}>TAKE PREVIEW → PROGRAM</button></div>
-      <div className="panel compact"><div className="title"><b>AUDIO MIXER</b><em>{muted?"MUTED":Math.round(volume*100)+"%"}</em></div><div className="mixerMain"><div className="bigMeter"><i className={playing&&!muted?"meterLive":""}/></div><button onClick={()=>setMuted(v=>!v)}>{muted?"🔇":"🔊"}</button><input type="range" min="0" max="1" step="0.01" value={volume} onChange={e=>setVolume(Number(e.target.value))}/></div></div>
-      <div className="panel compact"><div className="title"><b>LAYERS / OVERLAYS</b><em>{layers.length}</em></div>{layers.map(l=><div className="simpleLayer" key={l.id}><button onClick={()=>toggleLayer(l.id)}>{l.visible?"◉":"○"}</button><b>{l.name}</b><small>{l.kind}</small><button onClick={()=>removeLayer(l.id)}>×</button></div>)}<div className="layerButtons"><button onClick={addTextLayer}>＋ Text</button><button onClick={addLayer}>＋ Media</button></div></div>
-      <div className="panel compact"><div className="title"><b>PROGRAM STATUS</b></div><div className="programInfo"><span>NOW PLAYING</span><b>{programLayers.find(x=>x.visible)?.name||"Standby"}</b><small>{playing?"Playing":"Stopped"} • {elapsed}</small></div><p className="muted">Adding or selecting another video only changes Preview. The current Program stays running until TAKE.</p></div>
+function Studio(p:{
+  preview:MediaFile|null;program:MediaFile|null;previewPlaying:boolean;programPlaying:boolean;
+  previewTime:number;programTime:number;volume:number;muted:boolean;setVolume:(v:number)=>void;setMuted:(v:boolean)=>void;
+  togglePreview:()=>void;stopPreview:()=>void;take:()=>void;transition:"cut"|"fade";setTransition:(v:"cut"|"fade")=>void;
+  live:boolean;toggleLive:()=>void;scenes:Scene[];activeScene:string;setActiveScene:(v:string)=>void;addScene:()=>void;
+  sources:Source[];activeSource:string;setActiveSource:(v:string)=>void;addSource:()=>void;addWebSource:()=>void;
+  mediaFiles:MediaFile[];selectMedia:(id:string)=>void;upload:()=>void;
+}){
+  const previewRef=useRef<HTMLVideoElement>(null);
+  const programRef=useRef<HTMLVideoElement>(null);
+
+  useEffect(()=>{if(previewRef.current)previewRef.current.volume=p.volume},[p.volume,p.preview?.id]);
+  useEffect(()=>{if(programRef.current)programRef.current.volume=p.volume},[p.volume,p.program?.id]);
+
+  useEffect(()=>{
+    const v=previewRef.current;
+    if(!v)return;
+    if(p.previewPlaying){v.play().catch(()=>{})}else v.pause();
+  },[p.previewPlaying,p.preview?.id]);
+
+  useEffect(()=>{
+    const v=programRef.current;
+    if(!v)return;
+    if(p.programPlaying){v.play().catch(()=>{})}else v.pause();
+  },[p.programPlaying,p.program?.id]);
+
+  const fmt=(s:number)=>String(Math.floor(s/60)).padStart(2,"0")+":"+String(Math.floor(s%60)).padStart(2,"0");
+
+  const screen=(file:MediaFile|null,preview:boolean)=>(
+    <div className="screenWrap">
+      <div className="screenLabel"><b>{preview?"PREVIEW":"PROGRAM"}</b><span>{preview?(p.previewPlaying?"PLAYING":"READY"):(p.programPlaying?"LIVE":"STANDBY")}</span></div>
+      <div className="screen">
+        {!file&&<span className="screenEmpty">{preview?"SELECT A MEDIA ITEM":"PROGRAM STANDBY"}</span>}
+        {file?.type.startsWith("video/")&&<video
+          ref={preview?previewRef:programRef} key={file.id} src={file.url} muted={p.muted} preload="auto" playsInline
+          onTimeUpdate={e=>{if(preview){(e.currentTarget.dataset as DOMStringMap).time=String(e.currentTarget.currentTime)}}}
+          onLoadedMetadata={e=>{e.currentTarget.currentTime=preview?p.previewTime:p.programTime}}
+          onEnded={()=>{if(preview)p.stopPreview()}}
+        />}
+        {file?.type.startsWith("image/")&&<img src={file.url} alt={file.name}/>}
+        {file?.type.startsWith("audio/")&&<div className="audioScreen"><strong>♫ {file.name}</strong><audio src={file.url} controls autoPlay={!preview&&p.programPlaying}/></div>}
+        {!preview&&file&&<div className="liveBadge">{p.programPlaying?"LIVE":"PROGRAM"}</div>}
+      </div>
+      <div className="previewControls">
+        <button className="playMain" onClick={preview?p.togglePreview:()=>{}}>{preview?(p.previewPlaying?"Ⅱ Pause":"▶ Play"):"▶"}</button>
+        <span>{preview?fmt(p.previewTime):fmt(p.programTime)}</span>
+        <div className="miniMeter"><i className={((preview?p.previewPlaying:p.programPlaying)&&!p.muted)?"meterLive":""}/></div>
+        <button onClick={()=>p.setMuted(!p.muted)}>{p.muted?"🔇":"🔊"}</button>
+        <input type="range" min="0" max="1" step=".01" value={p.volume} onChange={e=>p.setVolume(Number(e.target.value))}/>
+      </div>
     </div>
-    <div className="panel"><div className="title"><b>QUICK SOURCES</b><em>Simple mode</em></div><div className="quickSources"><button onClick={addLayer}>＋ Video / Image</button><button onClick={addTextLayer}>＋ Text</button><button onClick={toggleLive}>● Camera</button><button onClick={()=>setMuted(v=>!v)}>{muted?"🔇 Unmute":"🔊 Mute"}</button></div></div>
+  );
+
+  return <div className="studioSimple">
+    <div className="studioTitle"><div><small>OBS-STYLE CONTROL ROOM</small><h1>Studio</h1></div><div className="studioActions"><button onClick={p.togglePreview}>{p.previewPlaying?"Ⅱ PAUSE PREVIEW":"▶ PLAY PREVIEW"}</button><button onClick={p.stopPreview}>■ STOP PREVIEW</button><button className={p.live?"danger take":"take"} onClick={p.toggleLive}>{p.live?"■ STOP LIVE":"● GO LIVE"}</button></div></div>
+
+    <div className="obsTopSimple">
+      {screen(p.preview,true)}
+      <div className="takeColumn">
+        <button className="cutButton" onClick={()=>{p.setTransition("cut");p.take()}}>CUT</button>
+        <button className="fadeButton" onClick={()=>{p.setTransition("fade");p.take()}}>FADE</button>
+        <select value={p.transition} onChange={e=>p.setTransition(e.target.value as "cut"|"fade")}><option value="cut">Cut</option><option value="fade">Fade</option></select>
+        <small>Preview → Program</small>
+      </div>
+      {screen(p.program,false)}
+    </div>
+
+    <div className="obsBarSimple">
+      <div className="panel compact">
+        <div className="title"><b>SCENES</b><button onClick={p.addScene}>＋</button></div>
+        {p.scenes.map(s=><button key={s.id} className={"scene "+(p.activeScene===s.id?"selected":"")} onClick={()=>p.setActiveScene(s.id)}>▣ {s.name}</button>)}
+      </div>
+
+      <div className="panel compact">
+        <div className="title"><b>SOURCES</b><button onClick={p.addSource}>＋</button></div>
+        <div className="sourceGrid">{p.sources.map(s=><button key={s.id} className={p.activeSource===s.id?"sourceSelected":""} onClick={()=>p.setActiveSource(s.id)}>{s.kind==="Camera"?"▣":s.kind==="Image"?"▧":s.kind==="Audio"?"◖":s.kind==="Web"?"◎":s.kind==="Text"?"T":"▶"} {s.name}<b>＋</b></button>)}</div>
+        <button className="webSourceButton" onClick={p.addWebSource}>＋ Add Web Browser Source</button>
+      </div>
+
+      <div className="panel compact">
+        <div className="title"><b>MEDIA LIBRARY</b><button onClick={p.upload}>＋ Add</button></div>
+        <div className="mediaMini">{p.mediaFiles.length===0?<div className="empty">Add a video, image or audio file.</div>:p.mediaFiles.map(f=><button key={f.id} className={"mediaMiniRow "+(p.preview?.id===f.id?"selected":"")} onClick={()=>p.selectMedia(f.id)}><span>{f.type.startsWith("video/")?"▶":f.type.startsWith("image/")?"▧":"♫"}</span><b>{f.name}</b><small>Preview</small><i>▶</i></button>)}</div>
+      </div>
+
+      <div className="panel compact">
+        <div className="title"><b>AUDIO MIXER</b><em>{p.muted?"MUTED":Math.round(p.volume*100)+"%"}</em></div>
+        {["Desktop Audio","Mic / Aux","Video Audio","Media Audio"].map((x,i)=><div className="mixerRow" key={x}><div className="mixerName"><b>{x}</b><span>{i===2&&p.previewPlaying?"●":""}</span></div><div className="meter"><i className={p.previewPlaying&&!p.muted?"meterLive":""}/></div><div className="volumeLine"><button onClick={()=>p.setMuted(!p.muted)}>{p.muted?"🔇":"🔊"}</button><input type="range" min="0" max="1" step=".01" value={p.volume} onChange={e=>p.setVolume(Number(e.target.value))}/><span>{Math.round(p.volume*100)}%</span></div></div>)}
+      </div>
+    </div>
+
+    <div className="lowerStudio">
+      <div className="panel">
+        <div className="title"><b>PLAYLIST / RUN ORDER</b><em>{p.mediaFiles.length} MEDIA</em></div>
+        <div className="playlist">{p.mediaFiles.length===0?<div className="empty">Your playlist is empty.</div>:p.mediaFiles.map((f,i)=><div className="playlistRow" key={f.id}><strong>{i+1}</strong><span>{f.type.startsWith("video/")?"▶":"♫"}</span><b>{f.name}</b><small>{(f.size/1024/1024).toFixed(1)} MB</small><button onClick={()=>p.selectMedia(f.id)}>Preview</button><button onClick={()=>p.selectMedia(f.id)}>▶</button></div>)}</div>
+      </div>
+      <div className="panel programInfoPanel"><div className="title"><b>PROGRAM INFO</b></div><div className="programInfo"><span>NOW PLAYING</span><b>{p.program?.name||"Standby"}</b><small>{p.program?(p.programPlaying?"● Playing":"Stopped"):"No programme on Program"}</small></div><p className="muted">Selecting or adding another video only changes Preview. Program stays untouched until CUT or FADE.</p></div>
+    </div>
   </div>
 }
 
-function Schedule({rows,add}:{rows:string[][];add:()=>void}){return <div className="panel full"><div className="title"><b>WEEKLY PROGRAMME SCHEDULE</b><button onClick={add}>＋ Add Programme</button></div><div className="table"><div className="thead"><span>TIME</span><span>PROGRAMME</span><span>SOURCE</span><span>STATUS</span></div>{rows.map(r=><div className="tr" key={r.join("-")}><span>{r[0]}</span><b>{r[1]}</b><span>{r[2]}</span><em>Scheduled</em></div>)}</div><p className="muted">This is the initial editable schedule foundation. The full cloud scheduler will become the source of truth for the Android broadcast engine.</p></div>}
+function Playlist({mediaFiles,previewMediaId,selectMedia,remove,upload}:{mediaFiles:MediaFile[];previewMediaId:string;selectMedia:(id:string)=>void;remove:(id:string)=>void;upload:()=>void}){
+  return <div className="panel full"><div className="title"><b>PLAYLIST / RUN ORDER</b><button onClick={upload}>＋ Add Media</button></div><div className="playlist">{mediaFiles.length===0?<div className="empty">Upload videos to build the run order.</div>:mediaFiles.map((f,i)=><div className="playlistRow" key={f.id}><strong>{i+1}</strong><span>{f.type.startsWith("video/")?"▶":"♫"}</span><b>{f.name}</b><small>{(f.size/1024/1024).toFixed(1)} MB</small><button onClick={()=>selectMedia(f.id)}>{previewMediaId===f.id?"Selected":"Preview"}</button><button onClick={()=>remove(f.id)}>×</button></div>)}</div></div>
+}
 
-function News({notify}:{notify:(x:string)=>void}){return <div className="two"><div className="panel"><div className="title"><b>AUTO NEWS</b><em className="green">AUTO VOICE</em></div><div className="news"><small>COURTESY OF CONFIGURED SOURCE</small><h2>Automated broadcast news</h2><p>Approved RSS/API feeds will be collected, summarized, attributed and converted to broadcast-ready stories before the next scheduled programme.</p><div className="ticker">KENYA • AFRICA • WORLD • SPORTS • BUSINESS • ENTERTAINMENT</div></div><div className="buttons"><button onClick={()=>notify("News test started")}>▶ Test News</button><button onClick={()=>notify("News source setup opened")}>＋ Add News Source</button><button onClick={()=>notify("Voice settings opened")}>⚙ Voice Settings</button></div></div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>{["TUKO NEWS","STANDARD MEDIA","GDELT / GLOBAL","Custom RSS / API"].map(s=><div className="health" key={s}><span>{s}</span><b>Ready</b></div>)}</div></div>}
+function Media({files,selected,select,remove,upload}:{files:MediaFile[];selected:string;select:(id:string)=>void;remove:(id:string)=>void;upload:()=>void}){
+  return <div className="panel full"><div className="title"><b>MEDIA LIBRARY</b><button onClick={upload}>＋ Upload Media</button></div><div className="media">{["🎬 Videos","🖼 Images","🎵 Audio","📢 Advertisements","📁 Playlists","🎞 Movies"].map(x=><button key={x} onClick={upload}><b>{x}</b><small>{files.length} files</small></button>)}</div><div className="libraryList">{files.length===0?<div className="empty">No media uploaded yet.</div>:files.map(f=><div className={"libraryItem "+(selected===f.id?"selected":"")} key={f.id} onClick={()=>select(f.id)}><div className="thumb">{f.type.startsWith("image/")?<img src={f.url} alt=""/>:f.type.startsWith("video/")?"▶":"♫"}</div><div><b>{f.name}</b><small>{f.type} • {(f.size/1024/1024).toFixed(1)} MB</small></div><button onClick={e=>{e.stopPropagation();remove(f.id)}}>Remove</button></div>)}</div><p className="muted">Select a file to load it into Preview. It does not replace Program.</p></div>
+}
 
-function Media({upload,files,selected,select,remove,fileInputRef,onFiles}:{upload:()=>void;files:{id:string;name:string;type:string;url:string;size:number}[];selected:string;select:(id:string)=>void;remove:(id:string)=>void;fileInputRef:React.RefObject<HTMLInputElement|null>;onFiles:(files:FileList|null)=>void}){return <div className="panel full"><div className="title"><b>MEDIA LIBRARY</b><button onClick={upload}>＋ Upload Media</button></div><input ref={fileInputRef} type="file" multiple accept="video/*,image/*,audio/*" hidden onChange={e=>{onFiles(e.target.files);e.currentTarget.value=""}}/><div className="media">{["🎬 Movies","📺 TV Shows","📢 Advertisements","🎵 Audio","🖼 Images","📁 Playlists"].map(x=><button key={x} onClick={upload}><b>{x}</b><small>{files.length} files</small></button>)}</div>{files.length===0?<div className="empty">No media yet. Upload videos, images or audio to test the Studio.</div>:<div className="libraryList">{files.map(f=><div className={"libraryItem "+(selected===f.id?"selected":"")} key={f.id} onClick={()=>select(f.id)}><div className="thumb">{f.type.startsWith("image/")?<img src={f.url} alt=""/>:f.type.startsWith("video/")?"🎬":"🎵"}</div><div><b>{f.name}</b><small>{f.type||"file"} • {(f.size/1024/1024).toFixed(1)} MB</small></div><button onClick={e=>{e.stopPropagation();remove(f.id)}}>Remove</button></div>)}</div>}<p className="muted">Browser playback is active for testing. Cloudinary storage and persistent media sync come next.</p></div>}
+function Schedule({rows,add}:{rows:string[][];add:()=>void}){return <div className="panel full"><div className="title"><b>WEEKLY PROGRAMME SCHEDULE</b><button onClick={add}>＋ Add Programme</button></div><div className="table"><div className="thead"><span>TIME</span><span>PROGRAMME</span><span>SOURCE</span><span>STATUS</span></div>{rows.map(r=><div className="tr" key={r.join("-")}><span>{r[0]}</span><b>{r[1]}</b><span>{r[2]}</span><em>Scheduled</em></div>)}</div></div>}
 
-function Streaming({connected,toggle,live}:{connected:Record<string,boolean>;toggle:(x:string)=>void;live:boolean}){return <div className="two"><div className="panel"><div className="title"><b>STREAMING OUTPUTS</b></div>{Object.keys(connected).map(x=><div className="dest" key={x}><div><b>{x}</b><small>{connected[x]?"Connected":"Not connected"}</small></div><button onClick={()=>toggle(x)}>{connected[x]?"Disconnect":"Connect"}</button></div>)}<button className="big" onClick={()=>{if(!live){alert("Start GO LIVE first");return}if(!Object.values(connected).some(Boolean)){alert("Connect at least one destination first");return}alert("Multi-destination broadcast started")}}>GO LIVE TO ALL CONNECTED DESTINATIONS</button></div><div className="panel"><div className="title"><b>FAILSAFE</b></div><p>✓ Automatic reconnect</p><p>✓ Internet-loss detection</p><p>✓ Standby fallback</p><p>✓ Watchdog recovery</p></div></div>}
+function News({notify}:{notify:(x:string)=>void}){return <div className="two"><div className="panel"><div className="title"><b>AUTO NEWS</b><em className="green">AUTO VOICE</em></div><div className="news"><small>COURTESY OF CONFIGURED SOURCE</small><h2>Automated broadcast news</h2><p>Approved RSS/API feeds can be collected, summarized, attributed and prepared for broadcast.</p><div className="ticker">KENYA • AFRICA • WORLD • SPORTS • BUSINESS • ENTERTAINMENT</div></div><div className="buttons"><button onClick={()=>notify("News test started")}>▶ Test News</button><button onClick={()=>notify("News source setup opened")}>＋ Add News Source</button><button onClick={()=>notify("Voice settings opened")}>⚙ Voice Settings</button></div></div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>{["TUKO NEWS","STANDARD MEDIA","GDELT / GLOBAL","Custom RSS / API"].map(s=><div className="health" key={s}><span>{s}</span><b>Ready</b></div>)}</div></div>}
 
-function Analytics({live}:{live:boolean}){return <div className="cards">{[["Live Viewers",live?"1":"0"],["Total Views",live?"1":"0"],["Watch Time",live?"00:01":"00:00"],["Followers","0"],["Peak Viewers",live?"1":"0"],["Health",live?"Stable":"Standby"]].map(x=><div className="metric" key={x[0]}><small>{x[0]}</small><strong>{x[1]}</strong><span>Today</span></div>)}</div>}
+function Streaming({connected,setConnected,live}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean}){return <div className="two"><div className="panel"><div className="title"><b>STREAMING OUTPUTS</b></div>{Object.keys(connected).map(x=><div className="dest" key={x}><div><b>{x}</b><small>{connected[x]?"Connected":"Not connected"}</small></div><button onClick={()=>setConnected({...connected,[x]:!connected[x]})}>{connected[x]?"Disconnect":"Connect"}</button></div>)}<button className="big" onClick={()=>alert(!live?"Start GO LIVE first":"Multi-destination broadcast started")}>GO LIVE TO ALL CONNECTED DESTINATIONS</button></div><div className="panel"><div className="title"><b>FAILSAFE</b></div><p>✓ Automatic reconnect</p><p>✓ Internet-loss detection</p><p>✓ Standby fallback</p><p>✓ Watchdog recovery</p></div></div>}
 
-function Audience({notify}:{notify:(x:string)=>void}){return <div className="two"><div className="panel"><div className="title"><b>AUDIENCE & SHARING</b><button onClick={()=>notify("Metrics refreshed")}>↻ Refresh</button></div>{["Facebook Pages / Groups","YouTube Communities","TikTok Audience","Other Communities"].map(x=><div className="dest" key={x}><div><b>{x}</b><small>Official API permissions required</small></div><button onClick={()=>notify("Connection setup opened")}>Connect</button></div>)}</div><div className="panel"><div className="title"><b>SHARE MESSAGE</b></div><textarea defaultValue={"🔴 WE ARE LIVE!\n\nJoin us now for the latest programme.\n\nDigital Television Solution 📺"}/><button className="big" onClick={()=>notify("Share message prepared")}>Prepare Share</button></div></div>}
+function Analytics({live,program}:{live:boolean;program:MediaFile|null}){return <div className="cards">{[["Live Viewers",live?"1":"0"],["Total Views",live?"1":"0"],["Program",program?.name||"Standby"],["Followers","0"],["Peak Viewers",live?"1":"0"],["Health",live?"Stable":"Standby"]].map(x=><div className="metric" key={x[0]}><small>{x[0]}</small><strong>{x[1]}</strong><span>Today</span></div>)}</div>}
 
-function Settings({notify}:{notify:(x:string)=>void}){return <div className="panel full"><div className="title"><b>SYSTEM SETTINGS</b></div><div className="settings"><button onClick={()=>notify("Broadcast engine settings opened")}>Broadcast Engine</button><button onClick={()=>notify("Cloudinary media settings opened")}>Cloud Media</button><button onClick={()=>notify("Platform authentication opened")}>Platform Accounts</button><button onClick={()=>notify("Failsafe settings opened")}>Failsafe & Recovery</button></div><p className="muted">The system is being rebuilt cleanly. Real streaming credentials, news APIs, Cloudinary storage and Android publishing will be connected in controlled stages.</p></div>}
+function Settings({notify}:{notify:(x:string)=>void}){return <div className="panel full"><div className="title"><b>SYSTEM SETTINGS</b></div><div className="settings"><button onClick={()=>notify("Broadcast Engine settings opened")}>Broadcast Engine</button><button onClick={()=>notify("Cloud Media settings opened")}>Cloud Media</button><button onClick={()=>notify("Platform authentication opened")}>Platform Accounts</button><button onClick={()=>notify("Failsafe settings opened")}>Failsafe & Recovery</button></div><p className="muted">OBS-style control is now separated into Preview and Program. Real platform credentials, cloud storage and Android publishing will be connected in later stages.</p></div>}

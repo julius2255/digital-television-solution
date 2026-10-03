@@ -90,9 +90,11 @@ export default function Home(){
     lastAutoSlotRef.current=scheduleClock;
     setPreviewMediaId(media.id);
     setPreviewWebUrl("");
+    setPreviewLayers(prev=>[{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,visible:true,locked:false},...prev.filter(x=>x.id!=="base")]);
     setPreviewPlaying(true);
     setProgramMediaId(media.id);
     setProgramWebUrl("");
+    setProgramLayers([{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,visible:true,locked:false}]);
     setProgramPlaying(true);
     setProgramTime(0);
     setActiveSource("media");
@@ -203,10 +205,12 @@ export default function Home(){
     if(!media){notify("Scheduled media is not available");return;}
     setPreviewMediaId(media.id);
     setPreviewWebUrl("");
+    setPreviewLayers(prev=>[{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,visible:true,locked:false},...prev.filter(x=>x.id!=="base")]);
     setPreviewPlaying(true);
     setPreviewTime(0);
     setProgramMediaId(media.id);
     setProgramWebUrl("");
+    setProgramLayers([{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,visible:true,locked:false}]);
     setProgramPlaying(true);
     setProgramTime(0);
     setActiveSource("media");
@@ -321,7 +325,13 @@ function Studio(p:{
     const common={className:cls,style,onPointerDown:(e:React.PointerEvent)=>!program&&beginDrag(e,l.id,"move"),onClick:(e:React.MouseEvent)=>{e.stopPropagation();if(!program)setSelectedLayerId(l.id)}};
     if(l.kind==="text")return <div key={l.id} {...common}><span>{l.text||"TEXT"}</span>{!program&&l.id===selectedLayerId&&<i className="resizeHandle" onPointerDown={e=>beginDrag(e,l.id,"resize")}/>}</div>;
     if(!media)return <div key={l.id} {...common}><span className="missingLayer">Media missing</span></div>;
-    const node=l.kind==="image"?<img src={media.url} alt={media.name}/>:<video src={media.url} muted={p.muted} autoPlay={program?p.programPlaying:p.previewPlaying} loop playsInline preload="auto"/>;
+    const node=l.kind==="image"?<img src={media.url} alt={media.name}/>:<video
+      ref={l.id==="base"?(program?programRef:previewRef):undefined}
+      src={media.url} muted={p.muted} autoPlay={l.id!=="base"} loop={l.id!=="base"} playsInline preload="auto"
+      onTimeUpdate={l.id==="base"?(e=>{if(program)setProgramClock(e.currentTarget.currentTime);else setPreviewClock(e.currentTarget.currentTime)}):undefined}
+      onLoadedMetadata={l.id==="base"?(e=>{e.currentTarget.currentTime=program?p.programTime:p.previewTime}):undefined}
+      onEnded={l.id==="base"?(e=>{if(program)p.onProgramEnded?.();else p.stopPreview()}):undefined}
+    />;
     return <div key={l.id} {...common}>{node}{!program&&l.id===selectedLayerId&&<i className="resizeHandle" onPointerDown={e=>beginDrag(e,l.id,"resize")}/>}</div>
   };
 

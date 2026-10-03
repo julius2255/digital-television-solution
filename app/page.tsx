@@ -490,11 +490,46 @@ function Schedule({rows,now,auto,setAuto,setRows,add,mediaFiles,playNow,showLogo
 }
 
 function News({notify}:{notify:(x:string)=>void}){
-  const [category,setCategory]=useState("Kenya"); const [source,setSource]=useState("TUKO NEWS"); const [autoVoice,setAutoVoice]=useState(true); const [ticker,setTicker]=useState(true); const [refresh,setRefresh]=useState(5); const [items,setItems]=useState<{title:string;description:string;link:string;published:string}[]>([]); const [loading,setLoading]=useState(false); const [selected,setSelected]=useState(0);
-  useEffect(()=>{const load=async()=>{setLoading(true);try{const r=await fetch("/api/news",{cache:"no-store"});const j=await r.json();setItems(j.items||[])}catch{}finally{setLoading(false)}};load();const id=window.setInterval(load,refresh*60000);return()=>window.clearInterval(id)},[refresh]);
-  return <div className="two"><div className="panel"><div className="title"><b>AUTO NEWS</b><em className="green">AUTO VOICE</em></div><div className="news"><small>COURTESY OF {source}</small><h2>Automated broadcast news</h2><p>{loading?"Loading live headlines…":items.length?`${items.length} live headlines loaded from the configured RSS/API reader.`:"No live headlines available right now."}</p>{items.length>0&&<div className="newsHeadline"><b>{items[selected%items.length].title}</b><small>{items[selected%items.length].description}</small><a href={items[selected%items.length].link} target="_blank" rel="noreferrer">Open source</a></div>}<div className="ticker">{ticker?"KENYA • AFRICA • WORLD • SPORTS • BUSINESS • ENTERTAINMENT":"Ticker disabled"}</div><div className="newsControls"><select value={category} onChange={e=>setCategory(e.target.value)}>{["Kenya","Africa","World","Sports","Business","Entertainment","Weather"].map(x=><option key={x}>{x}</option>)}</select><select value={source} onChange={e=>setSource(e.target.value)}>{["TUKO NEWS","STANDARD MEDIA","GDELT / GLOBAL","Custom RSS / API"].map(x=><option key={x}>{x}</option>)}</select><label><input type="checkbox" checked={autoVoice} onChange={e=>setAutoVoice(e.target.checked)}/> AUTO VOICE</label><label><input type="checkbox" checked={ticker} onChange={e=>setTicker(e.target.checked)}/> TICKER</label><span>Refresh {refresh} min</span></div></div><div className="buttons"><button onClick={()=>{setSelected(v=>v+1);notify(items.length?`Now reading: ${items[selected%items.length].title}`:"No headline available")}}>▶ Test News</button><button onClick={async()=>{setLoading(true);try{const r=await fetch("/api/news",{cache:"no-store"});const j=await r.json();setItems(j.items||[]);setSelected(0);notify(`Loaded ${(j.items||[]).length} headlines`)}catch{notify("News refresh failed")}finally{setLoading(false)}}}>↻ Refresh Now</button><button onClick={()=>notify("News source setup opened")}>＋ Add News Source</button><button onClick={()=>notify("Voice settings opened")}>⚙ Voice Settings</button></div></div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>{["TUKO NEWS","STANDARD MEDIA","GDELT / GLOBAL","Custom RSS / API"].map(s=><div className="health" key={s}><span>{s}</span><b>Ready</b></div>)}</div></div>
+  const [category,setCategory]=useState("Kenya"); const [source,setSource]=useState("TUKO NEWS");
+  const [autoVoice,setAutoVoice]=useState(true); const [ticker,setTicker]=useState(true); const [refresh,setRefresh]=useState(5);
+  const [items,setItems]=useState<{title:string;description:string;link:string;published:string}[]>([]);
+  const [loading,setLoading]=useState(false); const [selected,setSelected]=useState(0); const [speaking,setSpeaking]=useState(false);
+  const speakHeadline=(item:{title:string;description:string})=>{
+    if(typeof window==="undefined"||!("speechSynthesis" in window)){notify("Voice is not supported by this browser");return;}
+    window.speechSynthesis.cancel();
+    const utterance=new SpeechSynthesisUtterance([item.title,item.description].filter(Boolean).join(". "));
+    utterance.rate=.92; utterance.pitch=1; utterance.volume=1;
+    utterance.onstart=()=>setSpeaking(true); utterance.onend=()=>setSpeaking(false); utterance.onerror=()=>setSpeaking(false);
+    window.speechSynthesis.speak(utterance); notify("AUTO VOICE: reading headline");
+  };
+  const stopVoice=()=>{if(typeof window!=="undefined"&&"speechSynthesis" in window)window.speechSynthesis.cancel();setSpeaking(false)};
+  useEffect(()=>{
+    const load=async()=>{setLoading(true);try{const r=await fetch("/api/news",{cache:"no-store"});const j=await r.json();setItems(j.items||[])}catch{notify("News feed connection failed")}finally{setLoading(false)}};
+    load();const id=window.setInterval(load,refresh*60000);return()=>{window.clearInterval(id);stopVoice()};
+  },[refresh]);
+  useEffect(()=>{if(autoVoice&&items.length)speakHeadline(items[selected%items.length])},[selected,autoVoice]);
+  const current=items.length?items[selected%items.length]:null;
+  return <div className="two"><div className="panel">
+    <div className="title"><b>AUTO NEWS</b><em className="green">{speaking?"🔊 VOICE ON":"AUTO VOICE"}</em></div>
+    <div className="news"><small>COURTESY OF {source}</small><h2>Automated broadcast news</h2>
+      <p>{loading?"Loading live headlines…":items.length?items.length+" live headlines loaded from the configured RSS/API reader.":"No live headlines available right now."}</p>
+      {current&&<div className="newsHeadline"><b>{current.title}</b><small>{current.description}</small><a href={current.link} target="_blank" rel="noreferrer">Open source</a></div>}
+      <div className="ticker">{ticker?"KENYA • AFRICA • WORLD • SPORTS • BUSINESS • ENTERTAINMENT":"Ticker disabled"}</div>
+      <div className="newsControls"><select value={category} onChange={e=>setCategory(e.target.value)}>{["Kenya","Africa","World","Sports","Business","Entertainment","Weather"].map(x=><option key={x}>{x}</option>)}</select>
+      <select value={source} onChange={e=>setSource(e.target.value)}>{["TUKO NEWS","STANDARD MEDIA","GDELT / GLOBAL","Custom RSS / API"].map(x=><option key={x}>{x}</option>)}</select>
+      <label><input type="checkbox" checked={autoVoice} onChange={e=>setAutoVoice(e.target.checked)}/> AUTO VOICE</label><label><input type="checkbox" checked={ticker} onChange={e=>setTicker(e.target.checked)}/> TICKER</label><span>Refresh {refresh} min</span></div>
+    </div>
+    <div className="buttons">
+      <button onClick={()=>{if(!items.length){notify("No headline available");return}const next=(selected+1)%items.length;setSelected(next);if(autoVoice)speakHeadline(items[next])}}>▶ Next + Read</button>
+      <button onClick={()=>current?speakHeadline(current):notify("No headline available")}>🔊 Read Current</button>
+      <button onClick={stopVoice}>■ Stop Voice</button>
+      <button onClick={async()=>{setLoading(true);try{const r=await fetch("/api/news",{cache:"no-store"});const j=await r.json();setItems(j.items||[]);setSelected(0);notify("Loaded "+(j.items||[]).length+" headlines")}catch{notify("News refresh failed")}finally{setLoading(false)}}}>↻ Refresh Now</button>
+    </div>
+  </div></div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>
+    {["TUKO NEWS","STANDARD MEDIA","GDELT / GLOBAL","Custom RSS / API"].map(s=><div className="health" key={s}><span>{s}</span><b>{source===s?"ACTIVE":"Ready"}</b></div>)}
+    <div className="panel" style={{marginTop:12}}><div className="title"><b>VOICE ENGINE</b><em>{speaking?"SPEAKING":"READY"}</em></div><p className="muted">Browser text-to-speech is active for newsroom testing and preview. It uses the device voice and follows AUTO VOICE.</p></div>
+  </div></div>
 }
-
 function Streaming({connected,setConnected,live}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean}){
   const [autoReconnect,setAutoReconnect]=useState(true); const [standby,setStandby]=useState(true); const [bitrate,setBitrate]=useState(4500); const [health,setHealth]=useState<"Stable"|"Warning">("Stable");
   useEffect(()=>{if(!live){setHealth("Stable");return;} const id=window.setInterval(()=>setHealth(navigator.onLine?"Stable":"Warning"),3000); return()=>window.clearInterval(id)},[live]);

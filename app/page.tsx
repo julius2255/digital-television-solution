@@ -1,6 +1,6 @@
 "use client";
 
-import {useEffect, useRef, useState} from "react";
+import {useEffect,useRef,useState} from "react";
 
 type Section="studio"|"schedule"|"news"|"media"|"streaming"|"analytics"|"audience"|"settings";
 
@@ -62,12 +62,12 @@ export default function Home(){
       <div className="brand"><div className="logo">DTV</div><div><b>DIGITAL TELEVISION</b><small>SOLUTION</small></div></div>
       <div className={"air "+(live?"on":"")}><i/> {live?"ON AIR":"OFFLINE"}</div>
       <nav>{sections.map(([id,icon,label])=><button key={id} className={section===id?"nav active":"nav"} onClick={()=>setSection(id)}><span>{icon}</span>{label}</button>)}</nav>
-      <div className="sideFoot">Broadcast Control System<br/><small>v1.0 foundation</small></div>
+      <div className="sideFoot">Broadcast Control System<br/><small>v1.1 OBS-style studio</small></div>
     </aside>
     <section className="main">
       <header><div><small className="eyebrow">DIGITAL TELEVISION SOLUTION</small><h1>{sections.find(x=>x[0]===section)?.[2]}</h1></div><div className="actions"><span>● System Ready</span><button className="go" onClick={toggleLive}>{live?"STOP LIVE":"GO LIVE"}</button></div></header>
 
-      {section==="studio"&&<Studio live={live} scene={scene} setScene={setScene} scenes={scenes} addScene={addScene} source={source} setSource={selectSource} playing={playing} togglePlayback={togglePlayback} resetPlayback={resetPlayback} elapsed={elapsed} selectedMedia={mediaFiles.find(f=>f.id===selectedMedia)||null} layers={layers} programLayers={programLayers} selectedLayer={selectedLayer} setSelectedLayer={setSelectedLayer} addLayer={addLayer} addTextLayer={addTextLayer} removeLayer={removeLayer} toggleLayer={toggleLayer} cutToProgram={cutToProgram}/>}
+      {section==="studio"&&<Studio live={live} toggleLive={toggleLive} scene={scene} setScene={setScene} scenes={scenes} addScene={addScene} source={source} setSource={selectSource} playing={playing} togglePlayback={togglePlayback} resetPlayback={resetPlayback} elapsed={elapsed} selectedMedia={mediaFiles.find(f=>f.id===selectedMedia)||null} layers={layers} programLayers={programLayers} selectedLayer={selectedLayer} setSelectedLayer={setSelectedLayer} addLayer={addLayer} addTextLayer={addTextLayer} removeLayer={removeLayer} toggleLayer={toggleLayer} cutToProgram={cutToProgram}/>}
       {section==="schedule"&&<Schedule rows={schedule} add={addProgramme}/>}
       {section==="news"&&<News notify={notify}/>}
       {section==="media"&&<Media upload={upload} files={mediaFiles} selected={selectedMedia} select={selectMedia} remove={removeMedia} fileInputRef={fileInputRef} onFiles={handleFiles}/>}
@@ -81,24 +81,36 @@ export default function Home(){
   </main>;
 }
 
-function Studio({live,scene,setScene,scenes,addScene,source,setSource,playing,togglePlayback,resetPlayback,elapsed,selectedMedia,layers,programLayers,selectedLayer,setSelectedLayer,addLayer,addTextLayer,removeLayer,toggleLayer,cutToProgram}:{live:boolean;scene:string;setScene:(x:string)=>void;scenes:string[];addScene:()=>void;source:string;setSource:(x:string)=>void;playing:boolean;togglePlayback:()=>void;resetPlayback:()=>void;elapsed:string;selectedMedia:{name:string;type:string;url:string}|null;layers:Layer[];programLayers:Layer[];selectedLayer:string;setSelectedLayer:(x:string)=>void;addLayer:()=>void;addTextLayer:()=>void;removeLayer:()=>void;toggleLayer:(x:string)=>void;cutToProgram:()=>void}){
+function Studio({live,toggleLive,scene,setScene,scenes,addScene,source,setSource,playing,togglePlayback,resetPlayback,elapsed,selectedMedia,layers,programLayers,selectedLayer,setSelectedLayer,addLayer,addTextLayer,removeLayer,toggleLayer,cutToProgram}:{live:boolean;toggleLive:()=>void;scene:string;setScene:(x:string)=>void;scenes:string[];addScene:()=>void;source:string;setSource:(x:string)=>void;playing:boolean;togglePlayback:()=>void;resetPlayback:()=>void;elapsed:string;selectedMedia:{name:string;type:string;url:string}|null;layers:Layer[];programLayers:Layer[];selectedLayer:string;setSelectedLayer:(x:string)=>void;addLayer:()=>void;addTextLayer:()=>void;removeLayer:()=>void;toggleLayer:(x:string)=>void;cutToProgram:()=>void}){
+  const [volume,setVolume]=useState(1);
+  const [muted,setMuted]=useState(false);
   const sources=[["📷","Camera"],["🎞","Video"],["🖼","Image"],["🔤","Text"],["🎙","Microphone"],["🌐","Browser"],["📰","Auto News"],["©","Logo"]];
+  const audioLayers=layers.filter(l=>l.kind==="Video"||l.kind==="Audio"||l.kind==="Microphone");
   const renderLayer=(l:Layer)=><div className={"canvasLayer kind-"+l.kind.toLowerCase()} key={l.id}>
-    {l.kind==="Image"&&l.url?<img src={l.url} alt={l.name}/>:l.kind==="Video"&&l.url?<video src={l.url} autoPlay={playing} muted loop playsInline/>:l.kind==="Audio"&&l.url?<audio src={l.url} autoPlay={playing} controls/>:l.kind==="Text"?<strong>{l.name}</strong>:<span>{l.kind==="Camera"?"LIVE CAMERA":l.name}</span>}
+    {l.kind==="Image"&&l.url?<img src={l.url} alt={l.name}/>:l.kind==="Video"&&l.url?<video src={l.url} autoPlay={playing} muted={muted} volume={volume} controls={false} loop playsInline/>:l.kind==="Audio"&&l.url?<audio src={l.url} autoPlay={playing} muted={muted} volume={volume} controls/>:l.kind==="Text"?<strong>{l.name}</strong>:<span>{l.kind==="Camera"?"LIVE CAMERA":l.name}</span>}
   </div>;
   const renderCanvas=(items:Layer[],label:string)=><div className="canvasWrap"><div className="canvasLabel">{label}</div><div className="canvas">{items.filter(x=>x.visible).map(renderLayer)}{items.length===0&&<span className="canvasEmpty">NO SOURCES</span>}</div></div>;
   return <div className="studioObs">
     <div className="obsTop">
       {renderCanvas(layers,"PREVIEW")}
-      <div className="transition"><button onClick={cutToProgram}>CUT →</button><small>Send Preview to Program</small></div>
+      <div className="transition"><button onClick={cutToProgram}>CUT →</button><small>PREVIEW TO PROGRAM</small></div>
       {renderCanvas(programLayers,"PROGRAM")}
     </div>
-    <div className="obsGrid">
-      <div className="panel"><div className="title"><b>SCENES</b><button onClick={addScene}>＋ New Scene</button></div>{scenes.map(s=><button key={s} onClick={()=>setScene(s)} className={"scene "+(scene===s?"selected":"")}>▣ {s}<small>{scene===s?"ACTIVE":"SELECT"}</small></button>)}</div>
-      <div className="panel"><div className="title"><b>SOURCES</b><em>{source.toUpperCase()}</em></div><div className="sourceGrid">{sources.map(([icon,name])=><button className={source===name?"sourceSelected":""} onClick={()=>setSource(name)} key={name}>{icon} {name}</button>)}</div><div className="layerActions"><button onClick={addLayer}>＋ Add as Layer</button><button onClick={addTextLayer}>＋ Text Layer</button></div></div>
-      <div className="panel"><div className="title"><b>SOURCES / LAYERS</b><em>{layers.length} LAYERS</em></div><div className="layerList">{layers.map(l=><div className={"layerRow "+(selectedLayer===l.id?"selected":"")} key={l.id} onClick={()=>setSelectedLayer(l.id)}><button className="eye" onClick={e=>{e.stopPropagation();toggleLayer(l.id)}}>{l.visible?"◉":"○"}</button><span>☷</span><b>{l.name}</b><small>{l.kind}</small></div>)}</div><button className="removeLayer" onClick={removeLayer}>Remove Selected Layer</button></div>
-      <div className="panel"><div className="title"><b>PLAYBACK</b><em>{source.toUpperCase()}</em></div><div className="transport"><button onClick={togglePlayback}>{playing?"Ⅱ":"▶"}</button><button onClick={resetPlayback}>⏹</button><label>{elapsed}</label></div><div className="health"><span>Program</span><b>{live?"LIVE":"PREVIEW"}</b></div></div>
+
+    <div className="obsBar">
+      <div className="obsPanel"><div className="obsTitle"><b>SCENES</b><button onClick={addScene}>＋</button></div>{scenes.map(s=><button key={s} onClick={()=>setScene(s)} className={"scene "+(scene===s?"selected":"")}>▣ {s}</button>)}</div>
+
+      <div className="obsPanel"><div className="obsTitle"><b>SOURCES</b><em>{layers.length}</em></div><div className="sourceGrid">{sources.map(([icon,name])=><button className={source===name?"sourceSelected":""} onClick={()=>setSource(name)} key={name}>{icon} {name}</button>)}</div><div className="layerActions"><button onClick={addLayer}>＋ Add</button><button onClick={addTextLayer}>＋ Text</button></div></div>
+
+      <div className="obsPanel mixer"><div className="obsTitle"><b>AUDIO MIXER</b><em>{muted?"MUTED":"LIVE"}</em></div>{audioLayers.length===0?<div className="mixerEmpty">No audio source<br/><small>Add a video or audio file</small></div>:audioLayers.map(l=><div className="mixerRow" key={l.id}><div className="mixerName"><span>{l.kind==="Video"?"🎞":"🎙"}</span><b title={l.name}>{l.name}</b></div><div className="meter"><i className={playing&&!muted?"meterLive":""}/></div><div className="volumeLine"><button onClick={()=>setMuted(v=>!v)}>{muted?"🔇":"🔊"}</button><input type="range" min="0" max="1" step="0.01" value={volume} onChange={e=>setVolume(Number(e.target.value))}/><span>{Math.round(volume*100)}</span></div></div>)}</div>
+
+      <div className="obsPanel"><div className="obsTitle"><b>SCENE TRANSITIONS</b></div><div className="transitionBox"><select defaultValue="Cut"><option>Cut</option><option>Fade</option><option>Swipe</option></select><label>Duration <input defaultValue="300" /></label><button onClick={cutToProgram}>TAKE</button></div></div>
+
+      <div className="obsPanel"><div className="obsTitle"><b>CONTROLS</b></div><div className="controlStack"><button onClick={togglePlayback}>{playing?"Ⅱ PAUSE":"▶ PLAY"}</button><button onClick={resetPlayback}>⏹ STOP</button><button className={live?"danger":""} onClick={toggleLive}>{live?"■ STOP LIVE":"● GO LIVE"}</button></div></div>
     </div>
+
+    <div className="sourceLayers panel"><div className="title"><b>SOURCES / LAYERS</b><em>{layers.length} SOURCES</em></div><div className="layerList">{layers.map(l=><div className={"layerRow "+(selectedLayer===l.id?"selected":"")} key={l.id} onClick={()=>setSelectedLayer(l.id)}><button className="eye" onClick={e=>{e.stopPropagation();toggleLayer(l.id)}}>{l.visible?"◉":"○"}</button><span>☷</span><b>{l.name}</b><small>{l.kind}</small></div>)}</div><button className="removeLayer" onClick={removeLayer}>Remove Selected Source</button></div>
+
     <div className="panel"><div className="title"><b>BROADCAST HEALTH</b></div>{[["Connection",live?"Stable":"Standby"],["Bitrate",live?"4.8 Mbps":"0 Mbps"],["Dropped Frames","0.00%"],["Watchdog","Active"]].map(x=><div className="health" key={x[0]}><span>{x[0]}</span><b>{x[1]}</b></div>)}</div>
   </div>
 }

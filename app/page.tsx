@@ -1,6 +1,6 @@
 "use client";
 
-import {useState} from "react";
+import {useEffect, useRef, useState} from "react";
 
 type Section="studio"|"schedule"|"news"|"media"|"streaming"|"analytics"|"audience"|"settings";
 
@@ -28,12 +28,20 @@ export default function Home(){
   const [source,setSource]=useState("Camera");
   const [playing,setPlaying]=useState(false);
   const [elapsed,setElapsed]=useState("00:00:00");
+  const [mediaFiles,setMediaFiles]=useState<{id:string;name:string;type:string;url:string;size:number}[]>([]);
+  const [selectedMedia,setSelectedMedia]=useState("");
+  const fileInputRef=useRef<HTMLInputElement>(null);
+  useEffect(()=>{if(!playing)return;const timer=setInterval(()=>setElapsed(v=>{const p=v.split(":").map(Number);let s=p[0]*3600+p[1]*60+p[2]+1;return [Math.floor(s/3600),Math.floor((s%3600)/60),s%60].map(n=>String(n).padStart(2,"0")).join(":")}),1000);return()=>clearInterval(timer)},[playing]);
+  useEffect(()=>()=>mediaFiles.forEach(f=>URL.revokeObjectURL(f.url)),[mediaFiles]);
 
   const notify=(m:string)=>{setToast(m);setTimeout(()=>setToast(""),2500)};
   const toggleLive=()=>{setLive(v=>!v);notify(live?"Broadcast stopped":"Studio is ON AIR")};
   const addScene=()=>{const n=prompt("New scene name");if(n?.trim()){setScenes(v=>[...v,n.trim()]);setScene(n.trim());notify("Scene created")}};
   const addProgramme=()=>{const n=prompt("Programme name");if(!n?.trim())return;const t=prompt("Start time (HH:MM)","12:00")||"12:00";setSchedule(v=>[...v,[t,n.trim(),"Video"]].sort((a,b)=>a[0].localeCompare(b[0])));notify("Programme added")};
-  const upload=()=>notify("Media picker will be connected to Cloudinary in the next stage");
+  const upload=()=>fileInputRef.current?.click();
+  const handleFiles=(files:FileList|null)=>{if(!files)return;const incoming=Array.from(files).map((file,i)=>({id:String(Date.now())+"-"+i,name:file.name,type:file.type||"file",url:URL.createObjectURL(file),size:file.size}));setMediaFiles(v=>[...v,...incoming]);if(incoming[0]){setSelectedMedia(incoming[0].id);selectSource(incoming[0].type.startsWith("image/")?"Image":incoming[0].type.startsWith("audio/")?"Microphone":"Video")}notify(incoming.length+" media file"+(incoming.length===1?"":"s")+" added")};
+  const selectMedia=(id:string)=>{const f=mediaFiles.find(x=>x.id===id);if(!f)return;setSelectedMedia(id);selectSource(f.type.startsWith("image/")?"Image":f.type.startsWith("audio/")?"Microphone":"Video");setPlaying(false);setElapsed("00:00:00");notify(f.name+" selected")};
+  const removeMedia=(id:string)=>{setMediaFiles(v=>{const f=v.find(x=>x.id===id);if(f)URL.revokeObjectURL(f.url);return v.filter(x=>x.id!==id)});if(selectedMedia===id)setSelectedMedia("");notify("Media removed")};
   const toggleDestination=(n:string)=>{setConnected(v=>({...v,[n]:!v[n]}));notify((connected[n]?"Disconnected ":"Connected ")+n)};
   const selectSource=(n:string)=>{setSource(n);notify(n+" source selected")};
   const togglePlayback=()=>{setPlaying(v=>!v);notify(playing?"Playback paused":"Playback started")};
@@ -52,7 +60,7 @@ export default function Home(){
       {section==="studio"&&<Studio live={live} scene={scene} setScene={setScene} scenes={scenes} addScene={addScene} source={source} setSource={selectSource} playing={playing} togglePlayback={togglePlayback} resetPlayback={resetPlayback} elapsed={elapsed}/>}
       {section==="schedule"&&<Schedule rows={schedule} add={addProgramme}/>}
       {section==="news"&&<News notify={notify}/>}
-      {section==="media"&&<Media upload={upload}/>}
+      {section==="media"&&<Media upload={upload} files={mediaFiles} selected={selectedMedia} select={selectMedia} remove={removeMedia} fileInputRef={fileInputRef} onFiles={handleFiles}/>}
       {section==="streaming"&&<Streaming connected={connected} toggle={toggleDestination} live={live}/>}
       {section==="analytics"&&<Analytics live={live}/>}
       {section==="audience"&&<Audience notify={notify}/>}
@@ -81,12 +89,4 @@ function Schedule({rows,add}:{rows:string[][];add:()=>void}){return <div classNa
 
 function News({notify}:{notify:(x:string)=>void}){return <div className="two"><div className="panel"><div className="title"><b>AUTO NEWS</b><em className="green">AUTO VOICE</em></div><div className="news"><small>COURTESY OF CONFIGURED SOURCE</small><h2>Automated broadcast news</h2><p>Approved RSS/API feeds will be collected, summarized, attributed and converted to broadcast-ready stories before the next scheduled programme.</p><div className="ticker">KENYA • AFRICA • WORLD • SPORTS • BUSINESS • ENTERTAINMENT</div></div><div className="buttons"><button onClick={()=>notify("News test started")}>▶ Test News</button><button onClick={()=>notify("News source setup opened")}>＋ Add News Source</button><button onClick={()=>notify("Voice settings opened")}>⚙ Voice Settings</button></div></div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>{["TUKO NEWS","STANDARD MEDIA","GDELT / GLOBAL","Custom RSS / API"].map(s=><div className="health" key={s}><span>{s}</span><b>Ready</b></div>)}</div></div>}
 
-function Media({upload}:{upload:()=>void}){return <div className="panel full"><div className="title"><b>MEDIA LIBRARY</b><button onClick={upload}>＋ Upload Media</button></div><div className="media">{["🎬 Movies","📺 TV Shows","📢 Advertisements","🎵 Audio","🖼 Images","📁 Playlists"].map(x=><button key={x} onClick={upload}><b>{x}</b><small>0 files</small></button>)}</div><p className="muted">Cloud media storage, playlists, ad rotation and automatic preload will be connected next.</p></div>}
-
-function Streaming({connected,toggle,live}:{connected:Record<string,boolean>;toggle:(x:string)=>void;live:boolean}){return <div className="two"><div className="panel"><div className="title"><b>STREAMING OUTPUTS</b></div>{Object.keys(connected).map(x=><div className="dest" key={x}><div><b>{x}</b><small>{connected[x]?"Connected":"Not connected"}</small></div><button onClick={()=>toggle(x)}>{connected[x]?"Disconnect":"Connect"}</button></div>)}<button className="big" onClick={()=>{if(!live){alert("Start GO LIVE first");return} if(!Object.values(connected).some(Boolean)){alert("Connect at least one destination first");return} alert("Multi-destination broadcast started")}}>GO LIVE TO ALL CONNECTED DESTINATIONS</button></div><div className="panel"><div className="title"><b>FAILSAFE</b></div><p>✓ Automatic reconnect</p><p>✓ Internet-loss detection</p><p>✓ Standby fallback</p><p>✓ Watchdog recovery</p></div></div>}
-
-function Analytics({live}:{live:boolean}){return <div className="cards">{[["Live Viewers",live?"1":"0"],["Total Views",live?"1":"0"],["Watch Time",live?"00:01":"00:00"],["Followers","0"],["Peak Viewers",live?"1":"0"],["Health",live?"Stable":"Standby"]].map(x=><div className="metric" key={x[0]}><small>{x[0]}</small><strong>{x[1]}</strong><span>Today</span></div>)}</div>}
-
-function Audience({notify}:{notify:(x:string)=>void}){return <div className="two"><div className="panel"><div className="title"><b>AUDIENCE & SHARING</b><button onClick={()=>notify("Metrics refreshed")}>↻ Refresh</button></div>{["Facebook Pages / Groups","YouTube Communities","TikTok Audience","Other Communities"].map(x=><div className="dest" key={x}><div><b>{x}</b><small>Official API permissions required</small></div><button onClick={()=>notify("Connection setup opened")}>Connect</button></div>)}</div><div className="panel"><div className="title"><b>SHARE MESSAGE</b></div><textarea defaultValue={"🔴 WE ARE LIVE!\n\nJoin us now for the latest programme.\n\nDigital Television Solution 📺"}/><button className="big" onClick={()=>notify("Share message prepared")}>Prepare Share</button></div></div>}
-
-function Settings({notify}:{notify:(x:string)=>void}){return <div className="panel full"><div className="title"><b>SYSTEM SETTINGS</b></div><div className="settings"><button onClick={()=>notify("Broadcast engine settings opened")}>Broadcast Engine</button><button onClick={()=>notify("Cloudinary media settings opened")}>Cloud Media</button><button onClick={()=>notify("Platform authentication opened")}>Platform Accounts</button><button onClick={()=>notify("Failsafe settings opened")}>Failsafe & Recovery</button></div><p className="muted">The system is being rebuilt cleanly. Real streaming credentials, news APIs, Cloudinary storage and Android publishing will be connected in controlled stages.</p></div>}
+function Media({upload,files,selected,select,remove,fileInputRef,onFiles}:{upload:()=>void;files:{id:string;name:string;type:string;url:string;size:number}[];selected:string;select:(id:string)=>void;remove:(id:string)=>void;fileInputRef:React.RefObject<HTMLInputElement|null>;onFiles:(files:FileList|null)=>void}){return <div className="panel full"><div className="title"><b>MEDIA LIBRARY</b><button onClick={upload}>＋ Upload Media</button></div><input ref={fileInputRef} type="file" multiple accept="video/*,image/*,audio/*" hidden onChange={e=>{onFiles(e.target.files);e.currentTarget.value=""}}/><div className="media">{["🎬 Movies","📺 TV Shows","📢 Advertisements","🎵 Audio","🖼 Images","📁 Playlists"].map(x=><button key={x} onClick={upload}><b>{x}</b><small>{files.length} files</small></button>)}</div>{files.length===0?<div className="empty">No media yet. Upload videos, images or audio to test the Studio.</div>:<div className="libraryList">{files.map(f=><div className={"libraryItem "+(selected===f.id?"selected":"")} key={f.id} onClick={()=>select(f.id)}><div className="thumb">{f.type.startsWith("image/")?<img src={f.url} alt=""/>:f.type.startsWith("video/")?"🎬":"🎵"}</div><div><b>{f.name}</b><small>{f.type||"file"} • {(f.size/1024/1024).toFixed(1)} MB</small></div><button onClick={e=>{e.stopPropagation();remove(f.id)}}>Remove</button></div>)}</div>}<p className="muted">Browser playback is active for testing. Cloudinary storage and persistent media sync come next.</p></div>}

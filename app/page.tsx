@@ -497,13 +497,24 @@ function News({notify}:{notify:(x:string)=>void}){
   const speakHeadline=(item:{title:string;description:string})=>{
     if(typeof window==="undefined"||!("speechSynthesis" in window)){notify("Voice is not supported by this browser");return;}
     window.speechSynthesis.cancel();
-    const utterance=new SpeechSynthesisUtterance([item.title,item.description].filter(Boolean).join(". "));
+    const cleanText=(item.title+" "+(item.description||"")).replace(/\s+/g," ").trim();
+    const utterance=new SpeechSynthesisUtterance("This is Digital Television Solution News. "+cleanText);
     const voices=window.speechSynthesis.getVoices();
-    const v=voices.find(x=>x.name===voiceName)||voices.find(x=>/^en-KE/i.test(x.lang))||voices.find(x=>/^en-GB/i.test(x.lang))||voices.find(x=>/^en-US/i.test(x.lang));
-    if(v)utterance.voice=v;
-    utterance.lang=v?.lang||"en-KE"; utterance.rate=.78; utterance.pitch=.98; utterance.volume=1;
-    utterance.onstart=()=>setSpeaking(true); utterance.onend=()=>setSpeaking(false); utterance.onerror=()=>setSpeaking(false);
-    window.speechSynthesis.speak(utterance); notify("AUTO VOICE: reading headline");
+    const preferred=voices.find(x=>x.name===voiceName)
+      ||voices.find(x=>/^en-KE/i.test(x.lang))
+      ||voices.find(x=>/^en-GB/i.test(x.lang)&&/male|daniel|george|oliver|arthur/i.test(x.name))
+      ||voices.find(x=>/^en-GB/i.test(x.lang))
+      ||voices.find(x=>/^en-US/i.test(x.lang));
+    if(preferred)utterance.voice=preferred;
+    utterance.lang=preferred?.lang||"en-GB";
+    utterance.rate=.68;
+    utterance.pitch=.88;
+    utterance.volume=1;
+    utterance.onstart=()=>setSpeaking(true);
+    utterance.onend=()=>setSpeaking(false);
+    utterance.onerror=()=>setSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+    notify("NEWS ANCHOR: reading headline");
   };
   const stopVoice=()=>{if(typeof window!=="undefined"&&"speechSynthesis" in window)window.speechSynthesis.cancel();setSpeaking(false)};
   useEffect(()=>{if(typeof window==="undefined"||!("speechSynthesis" in window))return;const load=()=>setVoiceOptions(window.speechSynthesis.getVoices());load();window.speechSynthesis.addEventListener("voiceschanged",load);return()=>window.speechSynthesis.removeEventListener("voiceschanged",load)},[]);
@@ -515,7 +526,7 @@ function News({notify}:{notify:(x:string)=>void}){
   const current=items.length?items[selected%items.length]:null;
   return <div className="two"><div className="panel">
     <div className="title"><b>AUTO NEWS</b><em className="green">{speaking?"🔊 VOICE ON":"AUTO VOICE"}</em></div>
-    <div className="news"><small>COURTESY OF {source}</small><h2>Automated broadcast news</h2>
+    <div className="news newsroom"><div className="newsBackdrop"><span>LIVE NEWS</span><b>DIGITAL TELEVISION</b><i>24/7 NEWSROOM</i></div><small>COURTESY OF {source}</small><h2>Automated broadcast news</h2>
       <p>{loading?"Loading live headlines…":items.length?items.length+" live headlines loaded from the configured RSS/API reader.":"No live headlines available right now."}</p>
       {current&&<div className="newsHeadline"><b>{current.title}</b><small>{current.description}</small><a href={current.link} target="_blank" rel="noreferrer">Open source</a></div>}
       <div className="ticker">{ticker?"KENYA • AFRICA • WORLD • SPORTS • BUSINESS • ENTERTAINMENT":"Ticker disabled"}</div>
@@ -531,7 +542,7 @@ function News({notify}:{notify:(x:string)=>void}){
     </div>
   </div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>
     {["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD"].map(s=><div className="health" key={s}><span>{s}</span><b>{source===s?"ACTIVE":"Ready"}</b></div>)}
-    <div className="panel" style={{marginTop:12}}><div className="title"><b>VOICE ENGINE</b><em>{speaking?"SPEAKING":"READY"}</em></div><p className="muted">Browser text-to-speech is active for newsroom testing and preview. It uses the device voice and follows AUTO VOICE.</p></div>
+    <div className="panel" style={{marginTop:12}}><div className="title"><b>NEWS ANCHOR VOICE</b><em>{speaking?"ON AIR":"READY"}</em></div><p className="muted">Serious newsroom delivery: slower pace, lower pitch and English news-anchor voice selection. For production broadcast audio, the next stage will route generated TTS audio into the Program mixer.</p></div>
   </div></div>
 }
 function Streaming({connected,setConnected,live}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean}){

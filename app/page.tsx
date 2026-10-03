@@ -44,6 +44,8 @@ export default function Home(){
   const [mediaFiles,setMediaFiles]=useState<MediaFile[]>([]);
   const [previewMediaId,setPreviewMediaId]=useState("");
   const [programMediaId,setProgramMediaId]=useState("");
+  const [previewWebUrl,setPreviewWebUrl]=useState("");
+  const [programWebUrl,setProgramWebUrl]=useState("");
   const [previewPlaying,setPreviewPlaying]=useState(false);
   const [programPlaying,setProgramPlaying]=useState(false);
   const [previewTime,setPreviewTime]=useState(0);
@@ -110,28 +112,31 @@ export default function Home(){
     const url=prompt("Web page URL","https://");
     if(!url?.trim())return;
     const source={id:String(Date.now()),name:"Web Browser",kind:"Web",url:url.trim(),visible:true};
-    setSources(v=>[...v,source]);setActiveSource(source.id);notify("Web source added to Preview");
+    setSources(v=>[...v,source]);setActiveSource(source.id);setPreviewMediaId("");setPreviewWebUrl(url.trim());setPreviewPlaying(false);notify("Web page loaded into Preview");
   };
 
   const take=(mode:"cut"|"fade"=transition,time=0)=>{
-    if(!previewMedia){
+    if(!previewMedia&&!previewWebUrl){
       notify("Select and play a media item in Preview first");
       return;
     }
-    setProgramMediaId(previewMedia.id);
-    setProgramPlaying(previewPlaying);
+    setProgramMediaId(previewMedia?.id||"");
+    setProgramWebUrl(previewWebUrl);
+    setProgramPlaying(previewWebUrl?true:previewPlaying);
     setProgramTime(time);
     setTransition(mode);
     notify(mode==="fade"?"FADE to Program":"CUT to Program");
   };
 
   const togglePreview=()=>{
+    if(previewWebUrl){notify("Web preview is loaded. Use CUT or FADE to send it to Program.");return}
     if(!previewMedia){notify("Select a video, image or audio item first");return}
     if(previewMedia.type.startsWith("image/")){notify("Image is already visible in Preview");return}
     setPreviewPlaying(v=>!v);
   };
 
-  const stopPreview=()=>{setPreviewPlaying(false);setPreviewTime(0)};
+  const stopPreview=()=>{setPreviewPlaying(false);setPreviewTime(0);setPreviewWebUrl("")};
+  const toggleProgram=()=>{if(!programMedia){notify("No video is currently on Program");return}setProgramPlaying(v=>!v)};
   const toggleLive=()=>{setLive(v=>!v);notify(live?"Broadcast stopped":"Broadcast is ON AIR")};
 
   const addProgramme=()=>{
@@ -153,13 +158,13 @@ export default function Home(){
 
     <section className="workspace">
       {section==="studio"&&<Studio
-        preview={previewMedia} program={programMedia} previewPlaying={previewPlaying} programPlaying={programPlaying}
+        preview={previewMedia} program={programMedia} previewWebUrl={previewWebUrl} programWebUrl={programWebUrl} previewPlaying={previewPlaying} programPlaying={programPlaying}
         previewTime={previewTime} programTime={programTime} volume={volume} muted={muted}
         setVolume={setVolume} setMuted={setMuted} togglePreview={togglePreview} stopPreview={stopPreview}
-        take={take} transition={transition} setTransition={setTransition} live={live} toggleLive={toggleLive}
+        toggleProgram={toggleProgram} take={take} transition={transition} setTransition={setTransition} live={live} toggleLive={toggleLive}
         scenes={scenes} activeScene={activeScene} setActiveScene={setActiveScene} addScene={addScene}
         sources={sources} activeSource={activeSource} setActiveSource={setActiveSource} addSource={addSource} addWebSource={addWebSource}
-        mediaFiles={mediaFiles} selectMedia={selectMedia} upload={()=>fileInputRef.current?.click()}
+        mediaFiles={mediaFiles} selectMedia={selectMedia} selectWeb={(url)=>{setPreviewMediaId("");setPreviewWebUrl(url);setPreviewPlaying(false);notify("Web page loaded into Preview")}} upload={()=>fileInputRef.current?.click()}
       />}
       {section==="playlist"&&<Playlist mediaFiles={mediaFiles} previewMediaId={previewMediaId} selectMedia={selectMedia} remove={removeMedia} upload={()=>fileInputRef.current?.click()}/>}
       {section==="schedule"&&<Schedule rows={schedule} add={addProgramme}/>}
@@ -176,12 +181,12 @@ export default function Home(){
 }
 
 function Studio(p:{
-  preview:MediaFile|null;program:MediaFile|null;previewPlaying:boolean;programPlaying:boolean;
+  preview:MediaFile|null;program:MediaFile|null;previewWebUrl:string;programWebUrl:string;previewPlaying:boolean;programPlaying:boolean;
   previewTime:number;programTime:number;volume:number;muted:boolean;setVolume:(v:number)=>void;setMuted:(v:boolean)=>void;
   togglePreview:()=>void;stopPreview:()=>void;take:()=>void;transition:"cut"|"fade";setTransition:(v:"cut"|"fade")=>void;
   live:boolean;toggleLive:()=>void;scenes:Scene[];activeScene:string;setActiveScene:(v:string)=>void;addScene:()=>void;
   sources:Source[];activeSource:string;setActiveSource:(v:string)=>void;addSource:()=>void;addWebSource:()=>void;
-  mediaFiles:MediaFile[];selectMedia:(id:string)=>void;upload:()=>void;
+  mediaFiles:MediaFile[];selectMedia:(id:string)=>void;selectWeb:(url:string)=>void;upload:()=>void;
 }){
   const previewRef=useRef<HTMLVideoElement>(null);
   const programRef=useRef<HTMLVideoElement>(null);
@@ -210,7 +215,8 @@ function Studio(p:{
     <div className="screenWrap">
       <div className="screenLabel"><b>{preview?"PREVIEW":"PROGRAM"}</b><span>{preview?(p.previewPlaying?"PLAYING":"READY"):(p.programPlaying?"LIVE":"STANDBY")}</span></div>
       <div className="screen">
-        {!file&&<span className="screenEmpty">{preview?"SELECT A MEDIA ITEM":"PROGRAM STANDBY"}</span>}
+        {!file&&!(preview?p.previewWebUrl:p.programWebUrl)&&<span className="screenEmpty">{preview?"SELECT A MEDIA ITEM":"PROGRAM STANDBY"}</span>}
+        {(preview?p.previewWebUrl:p.programWebUrl)&&<iframe className="webFrame" src={preview?p.previewWebUrl:p.programWebUrl} title={preview?"Web Preview":"Live Web Source"} />
         {file?.type.startsWith("video/")&&<video
           ref={preview?previewRef:programRef} key={file.id} src={file.url} muted={p.muted} preload="auto" playsInline
           onTimeUpdate={e=>{preview?setPreviewClock(e.currentTarget.currentTime):setProgramClock(e.currentTarget.currentTime)}}
@@ -222,7 +228,7 @@ function Studio(p:{
         {!preview&&file&&<div className="liveBadge">{p.programPlaying?"LIVE":"PROGRAM"}</div>}
       </div>
       <div className="previewControls">
-        <button className="playMain" onClick={preview?p.togglePreview:()=>{}}>{preview?(p.previewPlaying?"Ⅱ Pause":"▶ Play"):"▶"}</button>
+        <button className="playMain" onClick={preview?p.togglePreview:p.toggleProgram}>{preview?(p.previewPlaying?"Ⅱ Pause":"▶ Play"):(p.programPlaying?"Ⅱ Pause":"▶ Play")}</button>
         <span>{preview?fmt(previewClock):fmt(programClock)}</span>
         <div className="miniMeter"><i className={((preview?p.previewPlaying:p.programPlaying)&&!p.muted)?"meterLive":""}/></div>
         <button onClick={()=>p.setMuted(!p.muted)}>{p.muted?"🔇":"🔊"}</button>
@@ -253,7 +259,7 @@ function Studio(p:{
 
       <div className="panel compact">
         <div className="title"><b>SOURCES</b><button onClick={p.addSource}>＋</button></div>
-        <div className="sourceGrid">{p.sources.map(s=><button key={s.id} className={p.activeSource===s.id?"sourceSelected":""} onClick={()=>p.setActiveSource(s.id)}>{s.kind==="Camera"?"▣":s.kind==="Image"?"▧":s.kind==="Audio"?"◖":s.kind==="Web"?"◎":s.kind==="Text"?"T":"▶"} {s.name}<b>＋</b></button>)}</div>
+        <div className="sourceGrid">{p.sources.map(s=><button key={s.id} className={p.activeSource===s.id?"sourceSelected":""} onClick={()=>{p.setActiveSource(s.id);if(s.kind==="Web"&&s.url){p.selectWeb(s.url)}}}>{s.kind==="Camera"?"▣":s.kind==="Image"?"▧":s.kind==="Audio"?"◖":s.kind==="Web"?"◎":s.kind==="Text"?"T":"▶"} {s.name}<b>＋</b></button>)}</div>
         <button className="webSourceButton" onClick={p.addWebSource}>＋ Add Web Browser Source</button>
       </div>
 

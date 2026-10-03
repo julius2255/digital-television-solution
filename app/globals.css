@@ -42,3 +42,4 @@
 .sourceGrid button.sourceSelected{border-color:#1682ff;background:#10243d}
 @media(max-width:1100px){.obsTopSimple{grid-template-columns:1fr 72px 1fr}.obsBarSimple{grid-template-columns:1fr 1fr}.lowerStudio{grid-template-columns:1fr}}
 @media(max-width:700px){.obsTopSimple{grid-template-columns:1fr}.takeColumn{flex-direction:row;flex-wrap:wrap}.previewControls input{width:65px}.obsBarSimple{grid-template-columns:1fr}.lowerStudio{grid-template-columns:1fr}}
+.programFade{animation:programFadeIn .5s ease-out}@keyframes programFadeIn{from{opacity:0}to{opacity:1}}

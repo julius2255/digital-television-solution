@@ -42,7 +42,7 @@
 .sourceGrid button.sourceSelected{border-color:#1682ff;background:#10243d}
 @media(max-width:1100px){.obsTopSimple{grid-template-columns:1fr 72px 1fr}.obsBarSimple{grid-template-columns:1fr 1fr}.lowerStudio{grid-template-columns:1fr}}
 @media(max-width:700px){.obsTopSimple{grid-template-columns:1fr}.takeColumn{flex-direction:row;flex-wrap:wrap}.previewControls input{width:65px}.obsBarSimple{grid-template-columns:1fr}.lowerStudio{grid-template-columns:1fr}}
-.programFade{animation:programFadeIn .5s ease-out}@keyframes programFadeIn{from{opacity:0}to{opacity:1}}.webFrame{width:100%;height:100%;border:0;display:block;background:#080b10}.screen:has(.webFrame){overflow:hidden}
+.programFade{animation:programFadeIn var(--fade-duration,800ms) ease-in-out both;will-change:opacity}@keyframes programFadeIn{from{opacity:0}to{opacity:1}}.webFrame{width:100%;height:100%;border:0;display:block;background:#080b10}.screen:has(.webFrame){overflow:hidden}
 .scheduleActions{display:flex;align-items:center;gap:6px}.scheduleActions em{font-style:normal;font-size:8px;color:#7e899b}.scheduleStatus{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;background:#101722;border:1px solid #202a38;border-radius:6px;margin-bottom:8px;color:#78859a;font:9px monospace}.scheduleStatus b{color:#e8edf5;font-size:11px}.table .tr.current{border-color:#1682ff;background:#10243d}.table .tr input,.table .tr select{min-width:0;width:100%;background:#111823;border:1px solid #263143;color:#d8dee8;padding:7px;border-radius:4px;font:9px monospace}.table .tr button{background:#18202c;color:#aeb8c8;border:1px solid #263143;padding:6px;border-radius:4px;font-size:8px}@media(max-width:800px){.scheduleActions{flex-wrap:wrap}.scheduleStatus{flex-direction:column}.table{overflow:auto}.table .thead,.table .tr{min-width:720px}}
 
 /* Editable OBS-style composition studio */
@@ -145,3 +145,8 @@
 .playlistAvailableRow button:hover{border-color:#1682ff}
 .playlistRow button:disabled{opacity:.3;cursor:not-allowed}
 @media(max-width:850px){.playlistRunHead{display:none}.playlistAvailableRow{grid-template-columns:24px 1fr auto}.playlistAvailableRow small{display:none}.playlistAvailableRow button:nth-last-child(2){display:none}.playlistRow{grid-template-columns:25px 20px 1fr auto}.playlistRow button{padding:5px}.playlistRow small{display:none}}
+
+/* Broadcast automation: explicit schedule/logo controls and Program-only audio */
+.table .thead,.table .tr{grid-template-columns:80px minmax(130px,1.4fr) 100px minmax(130px,1.2fr) minmax(120px,1fr) 70px 82px 65px}
+.table .tr select{min-width:0}
+.mixerRow .muted{display:block;margin-top:6px;font-size:7px;line-height:1.4}

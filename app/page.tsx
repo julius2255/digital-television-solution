@@ -5,7 +5,7 @@ type Section="studio"|"playlist"|"schedule"|"news"|"media"|"streaming"|"analytic
 type MediaFile={id:string;name:string;type:string;url:string;size:number};
 type Scene={id:string;name:string};
 type Source={id:string;name:string;kind:string;mediaId?:string;url?:string;visible:boolean};
-type StudioLayer={id:string;name:string;kind:"video"|"image"|"text";mediaId?:string;text?:string;x:number;y:number;width:number;height:number;rotation:number;opacity:number;visible:boolean;locked:boolean;};
+type StudioLayer={id:string;name:string;kind:"video"|"image"|"text";mediaId?:string;text?:string;x:number;y:number;width:number;height:number;rotation:number;opacity:number;zoom:number;cropTop:number;cropRight:number;cropBottom:number;cropLeft:number;visible:boolean;locked:boolean;};
 const youtubeEmbedUrl=(value:string)=>{
   try{
     const u=new URL(value);
@@ -90,7 +90,7 @@ export default function Home(){
     lastAutoSlotRef.current=scheduleClock;
     setPreviewMediaId(media.id);
     setPreviewWebUrl("");
-    setPreviewLayers(prev=>[{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,visible:true,locked:false},...prev.filter(x=>x.id!=="base")]);
+    setPreviewLayers(prev=>[{id:"base",name:media.name,kind:media.type.startsWith("image/")?"image":"video",mediaId:media.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false},...prev.filter(x=>x.id!=="base")]);
     setPreviewPlaying(true);
     setProgramMediaId(media.id);
     setProgramWebUrl("");
@@ -281,10 +281,12 @@ function Studio(p:{
   const [programClock,setProgramClock]=useState(0);
   const [selectedLayerId,setSelectedLayerId]=useState("");
   const [fadePulse,setFadePulse]=useState(false);
+  const [cropMode,setCropMode]=useState(false);
+  const [canvasZoom,setCanvasZoom]=useState(100);
 
   useEffect(()=>{if(p.preview&&(!p.previewLayers.some(x=>x.id==="base")||p.previewLayers.find(x=>x.id==="base")?.mediaId!==p.preview.id)){
     const kind=p.preview.type.startsWith("image/")?"image":"video";
-    p.setPreviewLayers(prev=>[{id:"base",name:p.preview!.name,kind,mediaId:p.preview!.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,visible:true,locked:false},...prev.filter(x=>x.id!=="base")]);
+    p.setPreviewLayers(prev=>[{id:"base",name:p.preview!.name,kind,mediaId:p.preview!.id,x:0,y:0,width:100,height:100,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false},...prev.filter(x=>x.id!=="base")]);
   }},[p.preview?.id,p.preview?.type]);
 
   useEffect(()=>{if(!selectedLayerId&&p.previewLayers.length)setSelectedLayerId(p.previewLayers[0].id);if(selectedLayerId&&!p.previewLayers.some(x=>x.id===selectedLayerId))setSelectedLayerId(p.previewLayers[0]?.id||"")},[p.previewLayers,selectedLayerId]);
@@ -306,33 +308,53 @@ function Studio(p:{
   useEffect(()=>{if(p.programWebUrl&&isYoutubeEmbed(p.programWebUrl))controlYouTube(programWebRef,p.programPlaying?"playVideo":"pauseVideo")},[p.programPlaying,p.programWebUrl]);
 
   const addLayer=(kind:"image"|"video"|"text",file?:MediaFile)=>{
-    if(kind==="text"){const text=prompt("Text / lower third","LIVE • BREAKING NEWS");if(!text?.trim())return;const layer:StudioLayer={id:String(Date.now()),name:"Text / Lower Third",kind:"text",text:text.trim(),x:10,y:72,width:80,height:16,rotation:0,opacity:1,visible:true,locked:false};p.setPreviewLayers(v=>[...v,layer]);setSelectedLayerId(layer.id);return}
+    if(kind==="text"){const text=prompt("Text / lower third","LIVE • BREAKING NEWS");if(!text?.trim())return;const layer:StudioLayer={id:String(Date.now()),name:"Text / Lower Third",kind:"text",text:text.trim(),x:10,y:72,width:80,height:16,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false};p.setPreviewLayers(v=>[...v,layer]);setSelectedLayerId(layer.id);return}
     if(!file){p.upload();return}
-    const layer:StudioLayer={id:String(Date.now())+"-"+Math.random().toString(36).slice(2,6),name:kind==="image"?"Logo / Image":file.name,kind,mediaId:file.id,x:kind==="image"?72:15,y:kind==="image"?6:15,width:kind==="image"?22:55,height:kind==="image"?18:40,rotation:0,opacity:1,visible:true,locked:false};
+    const layer:StudioLayer={id:String(Date.now())+"-"+Math.random().toString(36).slice(2,6),name:kind==="image"?"Logo / Image":file.name,kind,mediaId:file.id,x:kind==="image"?72:15,y:kind==="image"?6:15,width:kind==="image"?22:55,height:kind==="image"?18:40,rotation:0,opacity:1,zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,visible:true,locked:false};
     p.setPreviewLayers(v=>[...v,layer]);setSelectedLayerId(layer.id)
   };
   const updateLayer=(id:string,patch:Partial<StudioLayer>)=>p.setPreviewLayers(v=>v.map(l=>l.id===id?{...l,...patch}:l));
   const selected=p.previewLayers.find(x=>x.id===selectedLayerId)||null;
   const reorder=(id:string,dir:number)=>p.setPreviewLayers(v=>{const i=v.findIndex(x=>x.id===id),j=i+dir;if(i<0||j<0||j>=v.length)return v;const a=[...v];[a[i],a[j]]=[a[j],a[i]];return a});
   const removeLayer=(id:string)=>{if(id==="base")return;p.setPreviewLayers(v=>v.filter(x=>x.id!==id));setSelectedLayerId("")};
+  const duplicateLayer=(id:string)=>{const l=p.previewLayers.find(x=>x.id===id);if(!l)return;const copy={...l,id:String(Date.now())+"-copy",name:l.name+" Copy",x:Math.min(100-l.width,l.x+3),y:Math.min(100-l.height,l.y+3)};p.setPreviewLayers(v=>[...v,copy]);setSelectedLayerId(copy.id)};
   const beginDrag=(e:React.PointerEvent,id:string,mode:"move"|"resize")=>{e.stopPropagation();const l=p.previewLayers.find(x=>x.id===id);if(!l||l.locked)return;dragRef.current={id,mode,startX:e.clientX,startY:e.clientY,x:l.x,y:l.y,width:l.width,height:l.height};setSelectedLayerId(id)};
+  const beginHandle=(e:React.PointerEvent,id:string,handle:string)=>{
+    e.stopPropagation();const l=p.previewLayers.find(x=>x.id===id);const el=editorRef.current;if(!l||l.locked||!el)return;
+    const r=el.getBoundingClientRect();
+    const startX=e.clientX,startY=e.clientY;const sx=(e.clientX-r.left)/r.width*100,sy=(e.clientY-r.top)/r.height*100;
+    const onMove=(ev:PointerEvent)=>{
+      const dx=(ev.clientX-startX)/r.width*100,dy=(ev.clientY-startY)/r.height*100;
+      p.setPreviewLayers(v=>v.map(a=>{
+        if(a.id!==id)return a;let {x,y,width,height}=a;
+        if(handle.includes("e"))width=Math.max(5,Math.min(100-x,width+dx));
+        if(handle.includes("s"))height=Math.max(5,Math.min(100-y,height+dy));
+        if(handle.includes("w")){const nx=Math.max(0,Math.min(x+width-5,x+dx));width=x+width-nx;x=nx}
+        if(handle.includes("n")){const ny=Math.max(0,Math.min(y+height-5,y+dy));height=y+height-ny;y=ny}
+        return {...a,x,y,width,height};
+      }));
+    };
+    const onUp=()=>{window.removeEventListener("pointermove",onMove);window.removeEventListener("pointerup",onUp)};
+    window.addEventListener("pointermove",onMove);window.addEventListener("pointerup",onUp);
+  };
 
   const renderLayer=(l:StudioLayer,program:boolean)=>{
     if(!l.visible)return null;
     const media=p.mediaFiles.find(x=>x.id===l.mediaId);
     const style:React.CSSProperties={left:l.x+"%",top:l.y+"%",width:l.width+"%",height:l.height+"%",opacity:l.opacity,transform:"rotate("+l.rotation+"deg)"};
+    const mediaStyle:React.CSSProperties={width:(100+l.cropLeft+l.cropRight)*l.zoom+"%",height:(100+l.cropTop+l.cropBottom)*l.zoom+"%",left:(-(l.cropLeft*l.zoom))+"%",top:(-(l.cropTop*l.zoom))+"%"};
     const cls="compositionLayer "+(l.id===selectedLayerId&&!program?"selected":"");
     const common={className:cls,style,onPointerDown:(e:React.PointerEvent)=>!program&&beginDrag(e,l.id,"move"),onClick:(e:React.MouseEvent)=>{e.stopPropagation();if(!program)setSelectedLayerId(l.id)}};
-    if(l.kind==="text")return <div key={l.id} {...common}><span>{l.text||"TEXT"}</span>{!program&&l.id===selectedLayerId&&<i className="resizeHandle" onPointerDown={e=>beginDrag(e,l.id,"resize")}/>}</div>;
+    if(l.kind==="text")return <div key={l.id} {...common}><span>{l.text||"TEXT"}</span>{!program&&l.id===selectedLayerId&&<>{["nw","n","ne","e","se","s","sw","w"].map(h=><i key={h} className={"resizeHandle h-"+h} onPointerDown={e=>beginHandle(e,l.id,h)}/>)}</>}</div>;
     if(!media)return <div key={l.id} {...common}><span className="missingLayer">Media missing</span></div>;
-    const node=l.kind==="image"?<img src={media.url} alt={media.name}/>:<video
+    const node=l.kind==="image"?<img style={mediaStyle} src={media.url} alt={media.name}/>:<video style={mediaStyle}
       ref={l.id==="base"?(program?programRef:previewRef):undefined}
       src={media.url} muted={p.muted} autoPlay={program?p.programPlaying:p.previewPlaying} loop={l.id!=="base"} playsInline preload="auto"
       onTimeUpdate={l.id==="base"?(e=>{if(program)setProgramClock(e.currentTarget.currentTime);else setPreviewClock(e.currentTarget.currentTime)}):undefined}
       onLoadedMetadata={l.id==="base"?(e=>{e.currentTarget.currentTime=program?p.programTime:p.previewTime}):undefined}
       onEnded={l.id==="base"?(e=>{if(program)p.onProgramEnded?.();else p.stopPreview()}):undefined}
     />;
-    return <div key={l.id} {...common}>{node}{!program&&l.id===selectedLayerId&&<i className="resizeHandle" onPointerDown={e=>beginDrag(e,l.id,"resize")}/>}</div>
+    return <div key={l.id} {...common}>{node}{!program&&l.id===selectedLayerId&&<>{["nw","n","ne","e","se","s","sw","w"].map(h=><i key={h} className={"resizeHandle h-"+h} onPointerDown={e=>beginHandle(e,l.id,h)}/>)}</>}</div>
   };
 
   const composition=(program:boolean)=>{
@@ -358,14 +380,14 @@ function Studio(p:{
     <div className="obsTopSimple">{screen(false)}<div className="takeColumn"><button className="cutButton" onClick={()=>{p.setTransition("cut");p.take()}}>CUT</button><button className="fadeButton" onClick={()=>{p.setTransition("fade");setFadePulse(true);setTimeout(()=>setFadePulse(false),500);p.take()}}>FADE</button><select value={p.transition} onChange={e=>p.setTransition(e.target.value as "cut"|"fade")}><option value="cut">Cut</option><option value="fade">Fade</option></select><small>Full Preview → Program</small></div>{screen(true)}</div>
 
     <div className="studioEditor">
-      <div className="editorCanvasPanel panel"><div className="title"><b>PREVIEW EDITOR</b><em>DRAG • RESIZE • LAYER</em></div><div className="editorHint">Edit only Preview. Add logos, images, text and video layers. Program stays unchanged until CUT or FADE.</div>
-        <div className="editorCanvas"><div className="composition editorComposition" ref={editorRef}>{!p.previewLayers.some(x=>x.id==="base")&&!p.previewWebUrl&&<span className="screenEmpty">SELECT MEDIA TO START</span>}{!p.previewLayers.some(x=>x.id==="base")&&p.previewWebUrl&&<iframe className="compositionWeb" src={p.previewWebUrl} title="Editor Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}{p.previewLayers.map(l=>renderLayer(l,false))}</div></div>
+      <div className="editorCanvasPanel panel"><div className="title"><b>PREVIEW EDITOR</b><em>DRAG • RESIZE • LAYER</em></div><div className="editorHint">Edit only Preview. Add logos, images, text and video layers. Program stays unchanged until CUT or FADE.</div><div className="editorToolbar"><button onClick={()=>setCropMode(v=>!v)} className={cropMode?"active":""}>✂ {cropMode?"CROP MODE":"TRANSFORM"}</button><button onClick={()=>selected&&updateLayer(selected.id,{zoom:1,cropTop:0,cropRight:0,cropBottom:0,cropLeft:0,rotation:0})}>RESET</button><button onClick={()=>selected&&updateLayer(selected.id,{x:0,y:0,width:100,height:100})}>FIT</button><button onClick={()=>selected&&updateLayer(selected.id,{x:5,y:5,width:90,height:90})}>FILL</button><label>CANVAS ZOOM <input type="range" min="60" max="160" value={canvasZoom} onChange={e=>setCanvasZoom(Number(e.target.value))}/><b>{canvasZoom}%</b></label></div>
+        <div className="editorCanvas" style={{padding:"8px",overflow:"auto"}}><div className="editorZoomViewport" style={{width:canvasZoom+"%",margin:"0 auto"}}><div className="composition editorComposition" ref={editorRef}>{!p.previewLayers.some(x=>x.id==="base")&&!p.previewWebUrl&&<span className="screenEmpty">SELECT MEDIA TO START</span>}{!p.previewLayers.some(x=>x.id==="base")&&p.previewWebUrl&&<iframe className="compositionWeb" src={p.previewWebUrl} title="Editor Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}{p.previewLayers.map(l=>renderLayer(l,false))}</div></div></div>
       </div>
       <div className="editorSide panel">
         <div className="title"><b>LAYERS</b><em>{p.previewLayers.length} LAYERS</em></div>
-        <div className="editorLayerList">{[...p.previewLayers].reverse().map(l=><button key={l.id} className={"editorLayerRow "+(selectedLayerId===l.id?"selected":"")} onClick={()=>setSelectedLayerId(l.id)}><span>{l.kind==="text"?"T":l.kind==="image"?"▧":"▶"}</span><b>{l.name}</b><small>{l.kind}</small><i onClick={e=>{e.stopPropagation();updateLayer(l.id,{visible:!l.visible})}}>{l.visible?"◉":"○"}</i></button>)}</div>
+        <div className="editorLayerList">{[...p.previewLayers].reverse().map(l=><button key={l.id} className={"editorLayerRow "+(selectedLayerId===l.id?"selected":"")} onClick={()=>setSelectedLayerId(l.id)}><button className="layerEye" title={l.visible?"Hide layer":"Show layer"} onClick={e=>{e.stopPropagation();updateLayer(l.id,{visible:!l.visible})}}>{l.visible?"◉":"○"}</button><span>{l.kind==="text"?"T":l.kind==="image"?"▧":"▶"}</span><b>{l.name}</b><small>{l.kind}</small><button className="layerLock" title={l.locked?"Unlock layer":"Lock layer"} onClick={e=>{e.stopPropagation();updateLayer(l.id,{locked:!l.locked})}}>{l.locked?"🔒":"🔓"}</button></button>)}</div>
         <div className="editorButtons"><button onClick={()=>{const f=p.mediaFiles.find(x=>x.type.startsWith("image/"));if(f)addLayer("image",f);else p.upload()}}>＋ Logo / Image</button><button onClick={()=>{const f=p.mediaFiles.find(x=>x.type.startsWith("video/"));if(f)addLayer("video",f);else p.upload()}}>＋ Video Layer</button><button onClick={()=>addLayer("text")}>＋ Text / Lower Third</button></div>
-        {selected&&<div className="properties"><div className="propTitle">SELECTED: {selected.name}</div><label>X <input type="number" min="0" max="100" value={Math.round(selected.x)} onChange={e=>updateLayer(selected.id,{x:Number(e.target.value)})}/></label><label>Y <input type="number" min="0" max="100" value={Math.round(selected.y)} onChange={e=>updateLayer(selected.id,{y:Number(e.target.value)})}/></label><label>W <input type="number" min="5" max="100" value={Math.round(selected.width)} onChange={e=>updateLayer(selected.id,{width:Number(e.target.value)})}/></label><label>H <input type="number" min="5" max="100" value={Math.round(selected.height)} onChange={e=>updateLayer(selected.id,{height:Number(e.target.value)})}/></label><label>Opacity <input type="range" min="0.1" max="1" step=".05" value={selected.opacity} onChange={e=>updateLayer(selected.id,{opacity:Number(e.target.value)})}/></label><label>Rotation <input type="range" min="-180" max="180" value={selected.rotation} onChange={e=>updateLayer(selected.id,{rotation:Number(e.target.value)})}/></label>{selected.kind==="text"&&<label>Text <input value={selected.text||""} onChange={e=>updateLayer(selected.id,{text:e.target.value})}/></label>}<div className="propertyActions"><button onClick={()=>reorder(selected.id,1)}>↑ Forward</button><button onClick={()=>reorder(selected.id,-1)}>↓ Back</button><button onClick={()=>updateLayer(selected.id,{locked:!selected.locked})}>{selected.locked?"Unlock":"Lock"}</button><button className="removeLayerBtn" onClick={()=>removeLayer(selected.id)}>Delete</button></div></div>}
+        {selected&&<div className="properties"><div className="propTitle">SELECTED: {selected.name}</div><label>X <input type="number" min="0" max="100" value={Math.round(selected.x)} onChange={e=>updateLayer(selected.id,{x:Number(e.target.value)})}/></label><label>Y <input type="number" min="0" max="100" value={Math.round(selected.y)} onChange={e=>updateLayer(selected.id,{y:Number(e.target.value)})}/></label><label>W <input type="number" min="5" max="100" value={Math.round(selected.width)} onChange={e=>updateLayer(selected.id,{width:Number(e.target.value)})}/></label><label>H <input type="number" min="5" max="100" value={Math.round(selected.height)} onChange={e=>updateLayer(selected.id,{height:Number(e.target.value)})}/></label><label>Opacity <input type="range" min="0.1" max="1" step=".05" value={selected.opacity} onChange={e=>updateLayer(selected.id,{opacity:Number(e.target.value)})}/></label><label>Zoom <input type="range" min="0.5" max="3" step=".05" value={selected.zoom} onChange={e=>updateLayer(selected.id,{zoom:Number(e.target.value)})}/></label><label>Crop Top <input type="number" min="0" max="80" value={selected.cropTop} onChange={e=>updateLayer(selected.id,{cropTop:Number(e.target.value)})}/></label><label>Crop Right <input type="number" min="0" max="80" value={selected.cropRight} onChange={e=>updateLayer(selected.id,{cropRight:Number(e.target.value)})}/></label><label>Crop Bottom <input type="number" min="0" max="80" value={selected.cropBottom} onChange={e=>updateLayer(selected.id,{cropBottom:Number(e.target.value)})}/></label><label>Crop Left <input type="number" min="0" max="80" value={selected.cropLeft} onChange={e=>updateLayer(selected.id,{cropLeft:Number(e.target.value)})}/></label><label>Rotation <input type="range" min="-180" max="180" value={selected.rotation} onChange={e=>updateLayer(selected.id,{rotation:Number(e.target.value)})}/></label>{selected.kind==="text"&&<label>Text <input value={selected.text||""} onChange={e=>updateLayer(selected.id,{text:e.target.value})}/></label>}<div className="propertyActions"><button onClick={()=>reorder(selected.id,1)}>↑ Forward</button><button onClick={()=>reorder(selected.id,-1)}>↓ Back</button><button onClick={()=>duplicateLayer(selected.id)}>Duplicate</button><button onClick={()=>updateLayer(selected.id,{locked:!selected.locked})}>{selected.locked?"Unlock":"Lock"}</button><button className="removeLayerBtn" onClick={()=>removeLayer(selected.id)}>Delete</button></div></div>}
         <div className="editorMedia"><div className="propTitle">MEDIA FOR LAYERS</div><div className="editorMediaList">{p.mediaFiles.length?p.mediaFiles.map(f=><button key={f.id} onClick={()=>addLayer(f.type.startsWith("image/")?"image":"video",f)}><span>{f.type.startsWith("image/")?"▧":"▶"}</span>{f.name}</button>):<small>No uploaded media yet.</small>}</div></div>
       </div>
     </div>

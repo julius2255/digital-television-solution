@@ -388,6 +388,21 @@ function Studio(p:{
     window.addEventListener("pointermove",onMove);window.addEventListener("pointerup",onUp);
   };
 
+  const fitCanvas=()=>{setCanvasZoom(100);setCanvasPan({x:0,y:0});panRef.current=null};
+  const beginCanvasPan=(e:React.PointerEvent)=>{
+    const shouldPan=handMode||e.button===1||e.shiftKey||e.code==="Space";
+    if(!shouldPan)return;
+    e.preventDefault();
+    panRef.current={x:canvasPan.x,y:canvasPan.y,startX:e.clientX,startY:e.clientY};
+  };
+  const moveCanvasPan=(e:React.PointerEvent)=>{
+    const pan=panRef.current;
+    if(!pan)return;
+    e.preventDefault();
+    setCanvasPan({x:pan.x+(e.clientX-pan.startX),y:pan.y+(e.clientY-pan.startY)});
+  };
+  const endCanvasPan=()=>{panRef.current=null};
+
   const handleEditorWheel=(e:React.WheelEvent)=>{
     if(!selected||selected.locked)return;
     if(e.ctrlKey||e.metaKey||e.shiftKey){

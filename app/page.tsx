@@ -548,7 +548,7 @@ function News({notify}:{notify:(x:string)=>void}){
       .replace(/\b(?:LIVE|BREAKING|WATCH|READ MORE|CLICK HERE)\b/gi," ")
       .replace(/\s*[-–—|•]+\s*/g,". ")
       .replace(/\.{2,}/g,".")
-      .replace(/\b([A-Z]{2,})\b/g,(m)=>m.length<=5?m.split("").join(" "):m)
+      .replace(/\b([A-Z]{2,})\b/g,(m)=>["UN","UK","US","USA","UAE","EU","BBC","TV"].includes(m)?m.split("").join(" "):m)
       .replace(/\s+/g," ").trim();
   };
   const getEnglishVoices=()=>{
@@ -635,10 +635,15 @@ function News({notify}:{notify:(x:string)=>void}){
   const stopVoice=()=>{if(typeof window!=="undefined"&&"speechSynthesis" in window)window.speechSynthesis.cancel();if(audioRef.current){audioRef.current.pause();audioRef.current.currentTime=0;audioRef.current.src="";}setSpeaking(false)};
   useEffect(()=>{if(typeof window==="undefined"||!("speechSynthesis" in window))return;const load=()=>setVoiceOptions(getEnglishVoices());load();window.speechSynthesis.addEventListener("voiceschanged",load);return()=>window.speechSynthesis.removeEventListener("voiceschanged",load)},[]);
   useEffect(()=>{
-    const load=async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category),{cache:"no-store"});const j=await r.json();setItems(j.items||[])}catch{notify("News feed connection failed")}finally{setLoading(false)}};
+    const load=async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category),{cache:"no-store"});const j=await r.json();const nextItems=j.items||[];setItems(nextItems);if(nextItems.length)setTickerText(nextItems.slice(0,4).map((x:{title:string})=>x.title).join(" • "))}catch{notify("News feed connection failed")}finally{setLoading(false)}};
     load();const id=window.setInterval(load,refresh*60000);return()=>{window.clearInterval(id);stopVoice()};
   },[refresh,category]);
   useEffect(()=>{if(autoVoice&&items.length)speakHeadline(items[selected%items.length])},[selected,autoVoice,voiceName]);
+  useEffect(()=>{
+    if(!items.length)return;
+    const id=window.setInterval(()=>setSelected(v=>(v+1)%items.length),30000);
+    return()=>window.clearInterval(id);
+  },[items.length]);
   useEffect(()=>{const id=window.setInterval(()=>setClockNow(new Date()),1000);return()=>window.clearInterval(id)},[]);
   const current=items.length?items[selected%items.length]:null;
   const newsHour=clockNow.getHours();

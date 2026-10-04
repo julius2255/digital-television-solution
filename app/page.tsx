@@ -368,7 +368,7 @@ function Studio(p:{
   const reorder=(id:string,dir:number)=>p.setPreviewLayers(v=>{const i=v.findIndex(x=>x.id===id),j=i+dir;if(i<0||j<0||j>=v.length)return v;const a=[...v];[a[i],a[j]]=[a[j],a[i]];return a});
   const removeLayer=(id:string)=>{const layer=p.previewLayers.find(x=>x.id===id);if(id==="base"||layer?.role==="channel-logo"||layer?.role==="show-logo")return;p.setPreviewLayers(v=>v.filter(x=>x.id!==id));setSelectedLayerId("")};
   const duplicateLayer=(id:string)=>{const l=p.previewLayers.find(x=>x.id===id);if(!l)return;const copy={...l,id:String(Date.now())+"-copy",name:l.name+" Copy",x:Math.min(100-l.width,l.x+3),y:Math.min(100-l.height,l.y+3)};p.setPreviewLayers(v=>[...v,copy]);setSelectedLayerId(copy.id)};
-  const beginDrag=(e:React.PointerEvent,id:string,mode:"move"|"resize")=>{e.stopPropagation();const l=p.previewLayers.find(x=>x.id===id);if(!l||l.locked)return;const actualMode=(cropMode||e.altKey||e.metaKey)&&l.id!=="base"?"crop":mode;dragRef.current={id,mode:actualMode,startX:e.clientX,startY:e.clientY,x:l.x,y:l.y,width:l.width,height:l.height,cropTop:l.cropTop,cropRight:l.cropRight,cropBottom:l.cropBottom,cropLeft:l.cropLeft};setSelectedLayerId(id)};
+  const beginDrag=(e:React.PointerEvent,id:string,mode:"move"|"resize")=>{if(handMode)return;e.stopPropagation();const l=p.previewLayers.find(x=>x.id===id);if(!l||l.locked)return;const actualMode=(cropMode||e.altKey||e.metaKey)&&l.id!=="base"?"crop":mode;dragRef.current={id,mode:actualMode,startX:e.clientX,startY:e.clientY,x:l.x,y:l.y,width:l.width,height:l.height,cropTop:l.cropTop,cropRight:l.cropRight,cropBottom:l.cropBottom,cropLeft:l.cropLeft};setSelectedLayerId(id)};
   const beginHandle=(e:React.PointerEvent,id:string,handle:string)=>{
     e.stopPropagation();const l=p.previewLayers.find(x=>x.id===id);const el=editorRef.current;if(!l||l.locked||!el)return;
     const r=el.getBoundingClientRect();
@@ -404,12 +404,14 @@ function Studio(p:{
   const endCanvasPan=()=>{panRef.current=null};
 
   const handleEditorWheel=(e:React.WheelEvent)=>{
-    if(!selected||selected.locked)return;
+    e.preventDefault();
     if(e.ctrlKey||e.metaKey||e.shiftKey){
-      e.preventDefault();
+      if(!selected||selected.locked)return;
       const next=Math.max(0.25,Math.min(5,selected.zoom+(e.deltaY<0?0.1:-0.1)));
       updateLayer(selected.id,{zoom:Number(next.toFixed(2))});
+      return;
     }
+    setCanvasZoom(v=>Math.max(60,Math.min(200,v+(e.deltaY<0?10:-10))));
   };
   const renderLayer=(l:StudioLayer,program:boolean)=>{
     if(!l.visible)return null;

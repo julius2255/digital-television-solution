@@ -834,7 +834,7 @@ function Streaming({connected,setConnected,live}:{connected:Record<string,boolea
       <p>✓ Standby fallback · {standby?"ON":"OFF"}</p>
       <p>✓ Target · {resolution} · {fps} FPS · {bitrate} kbps</p>
       <div className="health"><span>RTMP delivery</span><b>{connected.Facebook?(live?"READY TO SEND":"CONFIGURED"):"OFFLINE"}</b></div>
-      <p className="muted">Facebook's Live Producer page must remain open for the current broadcast. Start the CHEMCHEM Android encoder after pasting the current Server URL and Stream Key. Facebook should then show the incoming preview. urlFacebook Live Producerhttps://www.facebook.com/live/producer</p>
+      <p className="muted">Facebook's Live Producer page must remain open for the current broadcast. Start the CHEMCHEM Android encoder after pasting the current Server URL and Stream Key. Facebook should then show the incoming preview. Facebook Live Producer (facebook.com/live/producer)</p>
       <p className="muted">If the Android app reports CONNECTION FAILED, use the exact error shown there; the system will no longer label a failed connection as LIVE.</p>
     </div>
   </div>

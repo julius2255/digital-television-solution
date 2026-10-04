@@ -525,24 +525,32 @@ function News({notify}:{notify:(x:string)=>void}){
   const speakWithAzure=async(item:{title:string;description:string})=>{
     const headline=normalizeNewsText(item.title);
     const description=normalizeNewsText(item.description||"");
-    const text=("This is Digital Television Solution News. "+headline+(description?" . "+description:"")).replace(/\\s+/g," ").trim();
+    const text=("This is Digital Television Solution News. "+headline+(description?". "+description:"")).replace(/\\s+/g," ").trim();
     try{
       setSpeaking(true);
       const r=await fetch("/api/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,voice:voiceName||"en-US-AriaNeural"})});
-      if(!r.ok)throw new Error("TTS unavailable");
+      if(!r.ok){
+        const data=await r.json().catch(()=>({}));
+        throw new Error(typeof data?.error==="string"?data.error:"Azure Speech request failed");
+      }
       const blob=await r.blob();
-      if(audioRef.current){audioRef.current.pause();audioRef.current.src="";URL.revokeObjectURL(audioRef.current.dataset.objectUrl||"");}
+      if(audioRef.current){
+        audioRef.current.pause();
+        const previous=audioRef.current.dataset.objectUrl;
+        if(previous)URL.revokeObjectURL(previous);
+        audioRef.current.src="";
+      }
       const url=URL.createObjectURL(blob);
       const audio=new Audio(url);
       audioRef.current=audio;
       audio.dataset.objectUrl=url;
       audio.onended=()=>{setSpeaking(false);URL.revokeObjectURL(url)};
-      audio.onerror=()=>{setSpeaking(false);URL.revokeObjectURL(url);notify("Azure voice playback failed")};
+      audio.onerror=()=>{setSpeaking(false);URL.revokeObjectURL(url);notify("Azure audio could not be played by this browser")};
       await audio.play();
       notify("AI NEWS ANCHOR: Azure Neural Voice");
-    }catch{
+    }catch(error){
       setSpeaking(false);
-      notify("Azure Neural voice failed. Check Azure Speech settings.");
+      notify(error instanceof Error?error.message:"Azure Neural voice failed");
     }
   };
   const speakWithBrowser=(item:{title:string;description:string})=>{

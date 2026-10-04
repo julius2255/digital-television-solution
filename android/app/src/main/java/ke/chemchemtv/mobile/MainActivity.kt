@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
 import android.widget.*
+import android.graphics.Color
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -52,7 +53,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
     status = TextView(this).apply {
       text = "● READY"
-      setTextColor(0xFF66DD88.toInt())
+      setTextColor(Color.rgb(102, 221, 136))
       textSize = 16f
     }
     val go = Button(this).apply {
@@ -97,17 +98,18 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
   override fun onConnectionStarted(url: String) { runOnUiThread { status.text = "● CONNECTING..." } }
-  override fun onConnectionSuccess() { streaming = true; runOnUiThread { status.text = "● LIVE" } }
+  override fun onConnectionSuccess() { streaming = true; runOnUiThread { status.text = "● LIVE — CONNECTED"; status.setTextColor(Color.rgb(25, 198, 111)) } }
   override fun onConnectionFailed(reason: String) {
     streaming = false
     runOnUiThread {
-      status.text = "● FAILED"
+      status.text = "● CONNECTION FAILED"
+      status.setTextColor(Color.rgb(255, 80, 90))
       Toast.makeText(this, reason, Toast.LENGTH_LONG).show()
     }
   }
-  override fun onNewBitrate(bitrate: Long) { runOnUiThread { status.text = "● LIVE  " + (bitrate / 1000) + " kbps" } }
-  override fun onDisconnect() { streaming = false; runOnUiThread { status.text = "● READY" } }
-  override fun onAuthError() { streaming = false; runOnUiThread { status.text = "● AUTH ERROR" } }
+  override fun onNewBitrate(bitrate: Long) { runOnUiThread { status.text = "● LIVE — CONNECTED  " + (bitrate / 1000) + " kbps"; status.setTextColor(Color.rgb(25, 198, 111)) } }
+  override fun onDisconnect() { streaming = false; runOnUiThread { status.text = "● READY"; status.setTextColor(Color.rgb(102, 221, 136)) } }
+  override fun onAuthError() { streaming = false; runOnUiThread { status.text = "● FACEBOOK AUTH ERROR"; status.setTextColor(Color.rgb(255, 80, 90)) } }
   override fun onAuthSuccess() {}
   override fun onDestroy() {
     if (::stream.isInitialized) {

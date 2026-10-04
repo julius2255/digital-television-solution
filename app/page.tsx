@@ -343,7 +343,7 @@ export default function Home(){
       {section==="schedule"&&<Schedule rows={schedule} now={scheduleClock} auto={autoSchedule} setAuto={setAutoSchedule} setRows={setSchedule} add={addProgramme} mediaFiles={mediaFiles} playNow={playScheduled} showLogoMap={showLogoMap} setShowLogoMap={setShowLogoMap} imageFiles={mediaFiles.filter(f=>f.type.startsWith("image/"))}/>} 
       {section==="news"&&<News notify={notify}/>}
       {section==="media"&&<Media files={mediaFiles} selected={previewMediaId} select={selectMedia} remove={removeMedia} upload={()=>fileInputRef.current?.click()}/>}
-      {section==="streaming"&&<Streaming connected={connected} setConnected={setConnected} live={live} program={programMedia} preview={previewMedia} programWebUrl={programWebUrl}/ >}
+      {section==="streaming"&&<Streaming connected={connected} setConnected={setConnected} live={live} program={programMedia} preview={previewMedia} programWebUrl={programWebUrl}/>}
       {section==="analytics"&&<Analytics live={live} program={programMedia} streamStartedAt={streamStartedAt} totalViews={totalViews} peakViewers={peakViewers} connected={connected}/>}
       {section==="settings"&&<Settings notify={notify}/>}
     </section>

@@ -110,6 +110,25 @@ export default function Home(){
     const row=schedule.find(r=>r[0]===scheduleClock);
     if(!row||lastAutoSlotRef.current===scheduleClock)return;
     lastAutoSlotRef.current=scheduleClock;
+    if(!row[3]&&row[2]==="Camera"){
+      if(cameraStreamRef.current){
+        setPreviewMediaId("");
+        setPreviewWebUrl("");
+        setPreviewLayers([]);
+        setPreviewPlaying(true);
+        setProgramMediaId("");
+        setProgramWebUrl("");
+        setProgramLayers([]);
+        setProgramPlaying(true);
+        setActiveSource("camera");
+        setTransition("cut");
+        notify("AUTO: "+row[1]+" is now live from Camera");
+      }else{
+        setProgramPlaying(false);
+        notify("AUTO: "+row[1]+" needs the Camera source started — standby fallback");
+      }
+      return;
+    }
     if(!row[3]){
       setProgramPlaying(false);
       notify("AUTO: "+row[1]+" has no assigned media — standby fallback");
@@ -690,7 +709,7 @@ function News({notify}:{notify:(x:string)=>void}){
 function Streaming({connected,setConnected,live}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean}){
   const [autoReconnect,setAutoReconnect]=useState(true); const [standby,setStandby]=useState(true); const [bitrate,setBitrate]=useState(4500); const [health,setHealth]=useState<"Stable"|"Warning">("Stable");
   useEffect(()=>{if(!live){setHealth("Stable");return;} const id=window.setInterval(()=>setHealth(navigator.onLine?"Stable":"Warning"),3000); return()=>window.clearInterval(id)},[live]);
-  return <div className="two"><div className="panel"><div className="title"><b>STREAMING OUTPUTS</b></div>{Object.keys(connected).map(x=><div className="dest" key={x}><div><b>{x}</b><small>{connected[x]?"Connected":"Not connected"}</small></div><button onClick={()=>setConnected({...connected,[x]:!connected[x]})}>{connected[x]?"Disconnect":"Connect"}</button></div>)}<div className="streamControls"><label>Target bitrate <input type="range" min="1000" max="9000" step="500" value={bitrate} onChange={e=>setBitrate(Number(e.target.value))}/><b>{bitrate} kbps</b></label><label><input type="checkbox" checked={autoReconnect} onChange={e=>setAutoReconnect(e.target.checked)}/> Automatic reconnect</label><label><input type="checkbox" checked={standby} onChange={e=>setStandby(e.target.checked)}/> Standby fallback</label></div><button className="big" onClick={()=>alert(!live?"Start GO LIVE first":"Multi-destination broadcast started")}>GO LIVE TO ALL CONNECTED DESTINATIONS</button></div><div className="panel"><div className="title"><b>FAILSAFE</b></div><p>✓ Automatic reconnect {autoReconnect?"ON":"OFF"}</p><p>✓ Internet-loss detection · {health}</p><p>✓ Standby fallback {standby?"ON":"OFF"}</p><p>✓ Watchdog recovery</p><p>✓ Target bitrate · {bitrate} kbps</p></div></div>
+  return <div className="two"><div className="panel"><div className="title"><b>STREAMING OUTPUTS</b></div>{Object.keys(connected).map(x=><div className="dest" key={x}><div><b>{x}</b><small>{connected[x]?"Profile enabled":"Not configured"}</small></div><button onClick={()=>setConnected({...connected,[x]:!connected[x]})}>{connected[x]?"Disable":"Enable"}</button></div>)}<div className="streamControls"><label>Target bitrate <input type="range" min="1000" max="9000" step="500" value={bitrate} onChange={e=>setBitrate(Number(e.target.value))}/><b>{bitrate} kbps</b></label><label><input type="checkbox" checked={autoReconnect} onChange={e=>setAutoReconnect(e.target.checked)}/> Automatic reconnect</label><label><input type="checkbox" checked={standby} onChange={e=>setStandby(e.target.checked)}/> Standby fallback</label></div><button className="big" onClick={()=>alert(!live?"Start GO LIVE first":"Control room is ON AIR. Hand the program feed to your configured OBS/FFmpeg encoder for actual RTMP delivery.")}>GO LIVE / ENCODER HANDOFF</button></div><div className="panel"><div className="title"><b>FAILSAFE</b></div><p>✓ Automatic reconnect {autoReconnect?"ON":"OFF"}</p><p>✓ Internet-loss detection · {health}</p><p>✓ Standby fallback {standby?"ON":"OFF"}</p><p>✓ Watchdog recovery · browser session</p><p>✓ Target bitrate · {bitrate} kbps · encoder target</p></div></div>
 }
 
 function Analytics({live,program,streamStartedAt,totalViews,peakViewers,connected}:{live:boolean;program:MediaFile|null;streamStartedAt:number|null;totalViews:number;peakViewers:number;connected:Record<string,boolean>}){

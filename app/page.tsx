@@ -531,10 +531,10 @@ function Schedule({rows,now,auto,setAuto,setRows,add,mediaFiles,playNow,showLogo
 }
 
 function News({notify}:{notify:(x:string)=>void}){
-  const [category,setCategory]=useState("Kenya"); const [source,setSource]=useState("TUKO NEWS");
+  const [category,setCategory]=useState("Kenya"); const [source,setSource]=useState("STANDARD KENYA");
   const [autoVoice,setAutoVoice]=useState(true); const [ticker,setTicker]=useState(true); const [refresh,setRefresh]=useState(5);
   const [showLowerThird,setShowLowerThird]=useState(true); const [breaking,setBreaking]=useState(false); const [showClock,setShowClock]=useState(true); const [tickerText,setTickerText]=useState("KENYA • AFRICA • WORLD • SPORTS • BUSINESS • ENTERTAINMENT");
-  const [items,setItems]=useState<{title:string;description:string;link:string;published:string}[]>([]);
+  const [items,setItems]=useState<{title:string;description:string;link:string;published:string;source?:string;image?:string}[]>([]);
   const [clockNow,setClockNow]=useState(new Date());
   const [loading,setLoading]=useState(false); const [selected,setSelected]=useState(0); const [speaking,setSpeaking]=useState(false); const [voiceName,setVoiceName]=useState("en-US-AriaNeural"); const [voiceOptions,setVoiceOptions]=useState<SpeechSynthesisVoice[]>([]); const [voiceEngine,setVoiceEngine]=useState<"kokoro"|"browser">("kokoro"); const audioRef=useRef<HTMLAudioElement|null>(null); const kokoroRef=useRef<any>(null);
   const stripMarkup=(value:string)=>{
@@ -663,7 +663,9 @@ function News({notify}:{notify:(x:string)=>void}){
       <div className="newsAnchorBar"><span>ANCHOR</span><b>{anchorName}</b><small>{newsDaypart}</small></div>
       <small className="newsCourtesy">COURTESY OF {source}</small>
       <p>{loading?"Loading live headlines…":items.length?items.length+" live headlines loaded from the configured RSS/API reader.":"No live headlines available right now."}</p>
-      {current&&<div className="newsHeadline"><div className="storyTag">{liveBreaking?"BREAKING NEWS":category.toUpperCase()}</div><b>{current.title}</b><small>{current.description}</small><div className="storyMeta"><span>COURTESY OF {source}</span><span>{current.published?new Date(current.published).toLocaleTimeString("en-KE",{hour:"2-digit",minute:"2-digit"}):""}</span><a href={current.link} target="_blank" rel="noreferrer">SOURCE ↗</a></div></div>}
+      {current&&<div className="newsHeadline">
+        {current.image&&<div className="newsStoryImage"><img src={current.image} alt="" loading="lazy" /></div>}
+        <div className="newsStoryContent"><div className="storyTag">{liveBreaking?"BREAKING NEWS":category.toUpperCase()}</div><b>{current.title}</b><small>{current.description}</small><div className="storyMeta"><span>COURTESY OF {current.source||source}</span><span>{current.published?new Date(current.published).toLocaleTimeString("en-KE",{hour:"2-digit",minute:"2-digit"}):""}</span><a href={current.link} target="_blank" rel="noreferrer">SOURCE ↗</a></div></div></div>}
       {showLowerThird&&current&&<div className="newsLowerThird">
         <div className="lowerTop"><strong>{liveBreaking?"BREAKING NEWS":"CHEMCHEM TV KENYA"}</strong><span>{category.toUpperCase()}</span></div>
         <b>{current.title}</b>

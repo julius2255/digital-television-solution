@@ -36,6 +36,7 @@ const parse=(xml:string,source:string)=>{
 export async function GET(req:Request){
   const url=new URL(req.url);
   const category=url.searchParams.get("category")||"Kenya";
+  const requestedSource=url.searchParams.get("source")||"";
   if(category==="Weather"){
     try{
       const weather=await fetch("https://api.open-meteo.com/v1/forecast?latitude=-1.2921&longitude=36.8219&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=Africa%2FNairobi&forecast_days=3",{cache:"no-store"});
@@ -57,7 +58,9 @@ export async function GET(req:Request){
     }catch{}
     return NextResponse.json({items:[],source:"OPEN-METEO WEATHER",category});
   }
-  const selected=feeds.filter(f=>f.categories.includes(category)||category==="Kenya"&&f.categories.includes("Kenya"));
+  const selected=requestedSource
+    ? feeds.filter(f=>f.name===requestedSource)
+    : feeds.filter(f=>f.categories.includes(category)||category==="Kenya"&&f.categories.includes("Kenya"));
   const targets=selected.length?selected:feeds.slice(0,1);
   const results:{title:string;description:string;link:string;published:string;source:string;image:string}[]=[];
   for(const feed of targets){

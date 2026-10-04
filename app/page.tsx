@@ -508,7 +508,7 @@ function Media({files,selected,select,remove,upload}:{files:MediaFile[];selected
   </div>
 }
 
-function Schedule({rows,now,auto,setAuto,setRows,add,mediaFiles,playNow,showLogoMap,setShowLogoMap,imageFiles}:{rows:string[][];now:string;auto:boolean;setAuto:(v:boolean)=>void;setRows:(v:string[][])=>void;add:()=>void;mediaFiles:MediaFile[];playNow:(row:string[])=>void;showLogoMap:Record<string,string>;setShowLogoMap:(v:Record<string,string>)=>void;imageFiles:MediaFile[]}){function Schedule({rows,now,auto,setAuto,setRows,add,mediaFiles,playNow,showLogoMap,setShowLogoMap,imageFiles}:{rows:string[][];now:string;auto:boolean;setAuto:(v:boolean)=>void;setRows:(v:string[][])=>void;add:()=>void;mediaFiles:MediaFile[];playNow:(row:string[])=>void;showLogoMap:Record<string,string>;setShowLogoMap:(v:Record<string,string>)=>void;imageFiles:MediaFile[]}){
+function Schedule({rows,now,auto,setAuto,setRows,add,mediaFiles,playNow,showLogoMap,setShowLogoMap,imageFiles}:{rows:string[][];now:string;auto:boolean;setAuto:(v:boolean)=>void;setRows:(v:string[][])=>void;add:()=>void;mediaFiles:MediaFile[];playNow:(row:string[])=>void;showLogoMap:Record<string,string>;setShowLogoMap:(v:Record<string,string>)=>void;imageFiles:MediaFile[]}){
   const ordered=[...rows].sort((a,b)=>(a[0]||"99:99").localeCompare(b[0]||"99:99"));
   const currentIndex=ordered.findIndex(r=>(r[0]||"")===now);
   const nextIndex=currentIndex>=0?((currentIndex+1)%ordered.length):-1;

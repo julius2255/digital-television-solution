@@ -535,6 +535,7 @@ function News({notify}:{notify:(x:string)=>void}){
   const [autoVoice,setAutoVoice]=useState(true); const [ticker,setTicker]=useState(true); const [refresh,setRefresh]=useState(5);
   const [showLowerThird,setShowLowerThird]=useState(true); const [breaking,setBreaking]=useState(false); const [showClock,setShowClock]=useState(true); const [tickerText,setTickerText]=useState("KENYA • AFRICA • WORLD • SPORTS • BUSINESS • ENTERTAINMENT");
   const [items,setItems]=useState<{title:string;description:string;link:string;published:string}[]>([]);
+  const [clockNow,setClockNow]=useState(new Date());
   const [loading,setLoading]=useState(false); const [selected,setSelected]=useState(0); const [speaking,setSpeaking]=useState(false); const [voiceName,setVoiceName]=useState("en-US-AriaNeural"); const [voiceOptions,setVoiceOptions]=useState<SpeechSynthesisVoice[]>([]); const [voiceEngine,setVoiceEngine]=useState<"kokoro"|"browser">("kokoro"); const audioRef=useRef<HTMLAudioElement|null>(null); const kokoroRef=useRef<any>(null);
   const stripMarkup=(value:string)=>{
     if(!value)return "";
@@ -638,13 +639,32 @@ function News({notify}:{notify:(x:string)=>void}){
     load();const id=window.setInterval(load,refresh*60000);return()=>{window.clearInterval(id);stopVoice()};
   },[refresh,category]);
   useEffect(()=>{if(autoVoice&&items.length)speakHeadline(items[selected%items.length])},[selected,autoVoice,voiceName]);
+  useEffect(()=>{const id=window.setInterval(()=>setClockNow(new Date()),1000);return()=>window.clearInterval(id)},[]);
   const current=items.length?items[selected%items.length]:null;
+  const newsHour=clockNow.getHours();
+  const newsDaypart=newsHour<11?"MORNING EDITION":newsHour<17?"DAYTIME EDITION":newsHour<21?"EVENING EDITION":"NIGHT EDITION";
+  const newsTheme=newsHour<11?"morning":newsHour<17?"day":newsHour<21?"evening":"night";
+  const autoBreaking=!!current&&/\b(breaking|urgent|alert|just in|developing)\b/i.test(current.title);
+  const liveBreaking=breaking||autoBreaking;
+  const anchorName=newsHour<11?"AMANI KIMANI":newsHour<17?"NIA WAMBUGU":newsHour<21?"DAVID OTIENO":"ZURI MWENDE";
   return <div className="two"><div className="panel">
     <div className="title"><b>AUTO NEWS</b><em className="green">{speaking?"🔊 VOICE ON":"AUTO VOICE"}</em></div>
-    <div className="news newsroom"><div className="newsBackdrop"><span>LIVE NEWS</span><b>DIGITAL TELEVISION SOLUTION</b><i>24/7 NEWSROOM</i></div><div className="newsTopBar"><b>{breaking?"● BREAKING NEWS":"DTS NEWS"}</b><span>{category.toUpperCase()}</span>{showClock&&<time>{new Date().toLocaleTimeString("en-KE",{hour:"2-digit",minute:"2-digit"})}</time>}</div><small>COURTESY OF {source}</small><h2>Automated news bulletin</h2>
+    <div className={"news newsroom news-"+newsTheme}>
+      <div className="newsBackdrop">
+        <div className="newsBrand"><span className="newsGlobe">◉</span><strong>CHEMCHEM <i>TV KENYA</i></strong><small>TRUTH • ACCURACY • FOR YOU</small></div>
+        <div className="newsEdition"><b>{newsDaypart}</b><span>24/7 LIVE NEWSROOM</span></div>
+      </div>
+      <div className="newsTopBar"><b>{liveBreaking?"● BREAKING NEWS":"● LIVE NEWS"}</b><span>{category.toUpperCase()}</span><em>CHEMCHEM TV KENYA</em>{showClock&&<time>{clockNow.toLocaleTimeString("en-KE",{hour:"2-digit",minute:"2-digit"})}</time>}</div>
+      <div className="newsAnchorBar"><span>ANCHOR</span><b>{anchorName}</b><small>{newsDaypart}</small></div>
+      <small className="newsCourtesy">COURTESY OF {source}</small>
       <p>{loading?"Loading live headlines…":items.length?items.length+" live headlines loaded from the configured RSS/API reader.":"No live headlines available right now."}</p>
-      {current&&<div className="newsHeadline"><div className="storyTag">{breaking?"BREAKING NEWS":category.toUpperCase()}</div><b>{current.title}</b><small>{current.description}</small><div className="storyMeta"><span>COURTESY OF {source}</span><span>{current.published?new Date(current.published).toLocaleTimeString("en-KE",{hour:"2-digit",minute:"2-digit"}):""}</span><a href={current.link} target="_blank" rel="noreferrer">SOURCE ↗</a></div></div>}
-      {showLowerThird&&current&&<div className="newsLowerThird"><strong>{breaking?"BREAKING":"DTS NEWS"}</strong><span>{current.title}</span><small>{category.toUpperCase()} · COURTESY {source}</small></div>}<div className="ticker">{ticker?tickerText:"Ticker disabled"}</div>
+      {current&&<div className="newsHeadline"><div className="storyTag">{liveBreaking?"BREAKING NEWS":category.toUpperCase()}</div><b>{current.title}</b><small>{current.description}</small><div className="storyMeta"><span>COURTESY OF {source}</span><span>{current.published?new Date(current.published).toLocaleTimeString("en-KE",{hour:"2-digit",minute:"2-digit"}):""}</span><a href={current.link} target="_blank" rel="noreferrer">SOURCE ↗</a></div></div>}
+      {showLowerThird&&current&&<div className="newsLowerThird">
+        <div className="lowerTop"><strong>{liveBreaking?"BREAKING NEWS":"CHEMCHEM TV KENYA"}</strong><span>{category.toUpperCase()}</span></div>
+        <b>{current.title}</b>
+        <small>{current.description||"Live newsroom update"} · COURTESY {source}</small>
+      </div>}
+      <div className="ticker"><strong>TOP STORIES</strong><div><span>{ticker?tickerText:"Ticker disabled"}</span><span>{ticker?tickerText:"Ticker disabled"}</span></div></div>
       <div className="newsControls"><select value={category} onChange={e=>setCategory(e.target.value)}>{["Kenya","Africa","World","Sports","Business","Entertainment","Weather"].map(x=><option key={x}>{x}</option>)}</select>
       <select value={source} onChange={e=>setSource(e.target.value)}>{["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD"].map(x=><option key={x}>{x}</option>)}</select>
       <label><input type="checkbox" checked={autoVoice} onChange={e=>setAutoVoice(e.target.checked)}/> AUTO VOICE</label><label><input type="checkbox" checked={ticker} onChange={e=>setTicker(e.target.checked)}/> TICKER</label><label><input type="checkbox" checked={showLowerThird} onChange={e=>setShowLowerThird(e.target.checked)}/> LOWER THIRDS</label><label><input type="checkbox" checked={breaking} onChange={e=>setBreaking(e.target.checked)}/> BREAKING STYLE</label><label><input type="checkbox" checked={showClock} onChange={e=>setShowClock(e.target.checked)}/> CLOCK</label><input aria-label="Ticker text" value={tickerText} onChange={e=>setTickerText(e.target.value)} /><span>Refresh {refresh} min</span><select value={voiceEngine} onChange={e=>{const v=e.target.value as "kokoro"|"browser";setVoiceEngine(v);setVoiceName(v==="kokoro"?"af_bella":"")}}><option value="kokoro">Kokoro Neural AI — FREE</option><option value="browser">Browser Voice (fallback)</option></select><select value={voiceName} onChange={e=>setVoiceName(e.target.value)}>{voiceEngine==="kokoro" ? <><option value="af_bella">Bella — American Female</option><option value="af_heart">Heart — American Female</option><option value="am_fenrir">Fenrir — American Male</option></> : <><option value="">Best English voice</option>{voiceOptions.map(v=><option key={v.name+"-"+v.lang} value={v.name}>{v.name} ({v.lang})</option>)}</>}</select></div>

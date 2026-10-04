@@ -504,7 +504,7 @@ function Studio(p:{
     const base=layers.find(x=>x.id==="base");const cameraActive=p.activeSource==="camera"&&!!p.cameraStream;
   const screenActive=p.activeSource==="screen"&&!!p.screenStream; const newsActive=program&&p.activeSource==="news"&&!!p.newsOnAir;
     return <div className={"composition "+(program&&fadePulse?"programFade":"")} style={program?{"--fade-duration":p.fadeSpeed+"ms"} as React.CSSProperties:undefined} ref={!program?editorRef:null}>
-      {!base&&!program&&cameraActive&&<video ref={previewCameraRef} className="compositionCamera" autoPlay muted playsInline/>}{!base&&!program&&screenActive&&<video ref={previewScreenRef} className="compositionCamera" autoPlay muted playsInline/>}{!base&&!program&&p.previewWebUrl&&<iframe ref={previewWebRef} className="compositionWeb" src={p.previewWebUrl} title="Preview Web Source" allow="autoplay; encrypted-media; picture-in-picture" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
+      {!base&&!program&&cameraActive&&<video ref={previewCameraRef} className="compositionCamera" autoPlay muted playsInline/>}{!base&&!program&&screenActive&&<video ref={previewScreenRef} className="compositionCamera" autoPlay muted playsInline/>}{!base&&!program&&p.previewWebUrl&&<iframe ref={previewWebRef} className="compositionWeb" src={p.previewWebUrl} title="Preview Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
       {!base&&program&&cameraActive&&<video ref={programCameraRef} className="compositionCamera" autoPlay muted={!p.programPlaying||p.muted} playsInline/>}{!base&&program&&screenActive&&<video ref={programScreenRef} className="compositionCamera" autoPlay muted={!p.programPlaying||p.muted} playsInline/>}{!base&&program&&p.programWebUrl&&<iframe ref={programWebRef} className="compositionWeb" src={p.programWebUrl} title="Program Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
       {newsActive&&<div className="compositionNews" style={{position:"absolute",inset:0,background:"#07111f",color:"#fff",overflow:"hidden",fontFamily:"Arial,sans-serif"}}>
         {p.newsOnAir?.image&&<img src={p.newsOnAir.image} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:.42}}/>}
@@ -670,7 +670,7 @@ function News({notify}:{notify:(x:string)=>void}){
     window.speechSynthesis.cancel();
     const headline=normalizeNewsText(item.title);
     const description=normalizeNewsText(item.description||"");
-    const text=("This is Digital Television Solution News. "+headline+(description?" . "+description:"")).replace(/\\s+/g," ").trim();
+    const text=("This is CHEMCHEM TV KENYA News. "+headline+(description?" . "+description:"")).replace(/\s+/g," ").trim();
     const voice=chooseAnchorVoice();
     const chunks=text.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map(x=>x.trim()).filter(Boolean)||[text];
     let index=0;

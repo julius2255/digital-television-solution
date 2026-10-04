@@ -494,30 +494,61 @@ function News({notify}:{notify:(x:string)=>void}){
   const [autoVoice,setAutoVoice]=useState(true); const [ticker,setTicker]=useState(true); const [refresh,setRefresh]=useState(5);
   const [items,setItems]=useState<{title:string;description:string;link:string;published:string}[]>([]);
   const [loading,setLoading]=useState(false); const [selected,setSelected]=useState(0); const [speaking,setSpeaking]=useState(false); const [voiceName,setVoiceName]=useState(""); const [voiceOptions,setVoiceOptions]=useState<SpeechSynthesisVoice[]>([]);
+  const stripMarkup=(value:string)=>{
+    if(!value)return "";
+    const box=document.createElement("div");
+    box.innerHTML=value;
+    return (box.textContent||box.innerText||"").replace(/https?:\/\/\S+/g," ").replace(/&(?:nbsp|amp|quot|apos|lt|gt);/gi," ").replace(/\s+/g," ").trim();
+  };
+  const normalizeNewsText=(value:string)=>{
+    return stripMarkup(value)
+      .replace(/\b(?:LIVE|BREAKING|WATCH|READ MORE|CLICK HERE)\b/gi," ")
+      .replace(/\s*[-–—|•]+\s*/g,". ")
+      .replace(/\.{2,}/g,".")
+      .replace(/\b([A-Z]{2,})\b/g,(m)=>m.length<=5?m.split("").join(" "):m)
+      .replace(/\s+/g," ").trim();
+  };
+  const getEnglishVoices=()=>{
+    if(typeof window==="undefined"||!("speechSynthesis" in window))return [];
+    return window.speechSynthesis.getVoices().filter(v=>/^en(?:-|$)/i.test(v.lang));
+  };
+  const chooseAnchorVoice=()=>{
+    const voices=getEnglishVoices();
+    return voices.find(v=>v.name===voiceName)
+      ||voices.find(v=>/Google UK English Female|Google UK English Male/i.test(v.name))
+      ||voices.find(v=>/Microsoft (?:David|George|Mark|Ryan|Guy|Jenny|Aria|Sonia|Libby).*(?:English|Natural)|Microsoft.*English.*Natural/i.test(v.name))
+      ||voices.find(v=>/^en-GB/i.test(v.lang)&&/male|daniel|george|oliver|arthur/i.test(v.name))
+      ||voices.find(v=>/^en-GB/i.test(v.lang))
+      ||voices.find(v=>/^en-US/i.test(v.lang))
+      ||voices[0];
+  };
   const speakHeadline=(item:{title:string;description:string})=>{
     if(typeof window==="undefined"||!("speechSynthesis" in window)){notify("Voice is not supported by this browser");return;}
     window.speechSynthesis.cancel();
-    const cleanText=(item.title+" "+(item.description||"")).replace(/\s+/g," ").trim();
-    const utterance=new SpeechSynthesisUtterance("This is Digital Television Solution News. "+cleanText);
-    const voices=window.speechSynthesis.getVoices();
-    const preferred=voices.find(x=>x.name===voiceName)
-      ||voices.find(x=>/^en-KE/i.test(x.lang))
-      ||voices.find(x=>/^en-GB/i.test(x.lang)&&/male|daniel|george|oliver|arthur/i.test(x.name))
-      ||voices.find(x=>/^en-GB/i.test(x.lang))
-      ||voices.find(x=>/^en-US/i.test(x.lang));
-    if(preferred)utterance.voice=preferred;
-    utterance.lang=preferred?.lang||"en-GB";
-    utterance.rate=.68;
-    utterance.pitch=.88;
-    utterance.volume=1;
-    utterance.onstart=()=>setSpeaking(true);
-    utterance.onend=()=>setSpeaking(false);
-    utterance.onerror=()=>setSpeaking(false);
-    window.speechSynthesis.speak(utterance);
-    notify("NEWS ANCHOR: reading headline");
+    const headline=normalizeNewsText(item.title);
+    const description=normalizeNewsText(item.description||"");
+    const text=("This is Digital Television Solution News. "+headline+(description?" . "+description:"")).replace(/\s+/g," ").trim();
+    const voice=chooseAnchorVoice();
+    const chunks=text.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map(x=>x.trim()).filter(Boolean)||[text];
+    let index=0;
+    setSpeaking(true);
+    const speakNext=()=>{
+      if(index>=chunks.length){setSpeaking(false);return;}
+      const utterance=new SpeechSynthesisUtterance(chunks[index++]);
+      if(voice)utterance.voice=voice;
+      utterance.lang=voice?.lang||"en-GB";
+      utterance.rate=.78;
+      utterance.pitch=.96;
+      utterance.volume=1;
+      utterance.onend=speakNext;
+      utterance.onerror=()=>setSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    };
+    speakNext();
+    notify("NEWS ANCHOR: "+(voice?.name||"clear English voice"));
   };
   const stopVoice=()=>{if(typeof window!=="undefined"&&"speechSynthesis" in window)window.speechSynthesis.cancel();setSpeaking(false)};
-  useEffect(()=>{if(typeof window==="undefined"||!("speechSynthesis" in window))return;const load=()=>setVoiceOptions(window.speechSynthesis.getVoices());load();window.speechSynthesis.addEventListener("voiceschanged",load);return()=>window.speechSynthesis.removeEventListener("voiceschanged",load)},[]);
+  useEffect(()=>{if(typeof window==="undefined"||!("speechSynthesis" in window))return;const load=()=>setVoiceOptions(getEnglishVoices());load();window.speechSynthesis.addEventListener("voiceschanged",load);return()=>window.speechSynthesis.removeEventListener("voiceschanged",load)},[]);
   useEffect(()=>{
     const load=async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category),{cache:"no-store"});const j=await r.json();setItems(j.items||[])}catch{notify("News feed connection failed")}finally{setLoading(false)}};
     load();const id=window.setInterval(load,refresh*60000);return()=>{window.clearInterval(id);stopVoice()};
@@ -538,11 +569,11 @@ function News({notify}:{notify:(x:string)=>void}){
       <button onClick={()=>{if(!items.length){notify("No headline available");return}const next=(selected+1)%items.length;setSelected(next);if(autoVoice)speakHeadline(items[next])}}>▶ Next + Read</button>
       <button onClick={()=>current?speakHeadline(current):notify("No headline available")}>🔊 Read Current</button>
       <button onClick={stopVoice}>■ Stop Voice</button>
-      <button onClick={async()=>{setLoading(true);try{const r=await fetch("/api/news",{cache:"no-store"});const j=await r.json();setItems(j.items||[]);setSelected(0);notify("Loaded "+(j.items||[]).length+" headlines")}catch{notify("News refresh failed")}finally{setLoading(false)}}}>↻ Refresh Now</button>
+      <button onClick={async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category),{cache:"no-store"});const j=await r.json();setItems(j.items||[]);setSelected(0);notify("Loaded "+(j.items||[]).length+" headlines")}catch{notify("News refresh failed")}finally{setLoading(false)}}}>↻ Refresh Now</button>
     </div>
   </div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>
     {["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD"].map(s=><div className="health" key={s}><span>{s}</span><b>{source===s?"ACTIVE":"Ready"}</b></div>)}
-    <div className="panel" style={{marginTop:12}}><div className="title"><b>NEWS ANCHOR VOICE</b><em>{speaking?"ON AIR":"READY"}</em></div><p className="muted">Serious newsroom delivery: slower pace, lower pitch and English news-anchor voice selection. For production broadcast audio, the next stage will route generated TTS audio into the Program mixer.</p></div>
+    <div className="panel" style={{marginTop:12}}><div className="title"><b>NEWS ANCHOR VOICE</b><em>{speaking?"ON AIR":"READY"}</em></div><p className="muted">Clear English newsroom delivery. The system filters out non-English browser voices, cleans RSS markup, normalizes headlines, removes noisy web text, and speaks sentence-by-sentence for cleaner pacing.</p><div className="health"><span>VOICE ENGINE</span><b>{voiceOptions.length?"English voices ready":"Waiting for browser voices"}</b></div></div>
   </div></div>
 }
 function Streaming({connected,setConnected,live}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean}){

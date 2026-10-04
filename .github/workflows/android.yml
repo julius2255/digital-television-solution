@@ -20,10 +20,11 @@ jobs:
           distribution: temurin
           java-version: "17"
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ""
       - name: Install Android API 37
-        run: |
-          sdkmanager "platforms;android-37"
+        run: sdkmanager --install "platforms;android-37"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.3.1"

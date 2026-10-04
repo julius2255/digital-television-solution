@@ -493,7 +493,7 @@ function News({notify}:{notify:(x:string)=>void}){
   const [category,setCategory]=useState("Kenya"); const [source,setSource]=useState("TUKO NEWS");
   const [autoVoice,setAutoVoice]=useState(true); const [ticker,setTicker]=useState(true); const [refresh,setRefresh]=useState(5);
   const [items,setItems]=useState<{title:string;description:string;link:string;published:string}[]>([]);
-  const [loading,setLoading]=useState(false); const [selected,setSelected]=useState(0); const [speaking,setSpeaking]=useState(false); // newsroom voice state const [voiceName,setVoiceName]=useState(""); const [voiceOptions,setVoiceOptions]=useState<SpeechSynthesisVoice[]>([]);
+  const [loading,setLoading]=useState(false); const [selected,setSelected]=useState(0); const [speaking,setSpeaking]=useState(false); const [voiceName,setVoiceName]=useState(""); const [voiceOptions,setVoiceOptions]=useState<SpeechSynthesisVoice[]>([]);
   const speakHeadline=(item:{title:string;description:string})=>{
     if(typeof window==="undefined"||!("speechSynthesis" in window)){notify("Voice is not supported by this browser");return;}
     window.speechSynthesis.cancel();

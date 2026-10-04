@@ -230,7 +230,7 @@ export default function Home(){
     if(!programMedia){notify("No video is currently on Program");return}
     setProgramPlaying(v=>!v)
   };
-  const toggleLive=()=>{setLive(v=>!v);notify(live?"Broadcast stopped":"Broadcast is ON AIR")};
+  const toggleLive=()=>{if(live){setLive(false);setStreamStartedAt(null);notify("Broadcast stopped");return;}setLive(true);setStreamStartedAt(Date.now());notify("CHEMCHEM TV KENYA is ON AIR")};
 
   const playMedia=(id:string)=>{setPreviewMediaId(id);setPreviewWebUrl("");setPreviewTime(0);setPreviewPlaying(true);setActiveSource("media");const file=mediaFiles.find(x=>x.id===id);if(file)notify(file.name+" started in Preview")};
   const movePlaylist=(id:string,dir:number)=>setPlaylistIds(v=>{const i=v.indexOf(id),j=i+dir;if(i<0||j<0||j>=v.length)return v;const a=[...v];[a[i],a[j]]=[a[j],a[i]];return a});
@@ -269,7 +269,7 @@ export default function Home(){
 
   return <main className="appOne">
     <header className="topbar">
-      <div className="brand"><div className="logo">DTV</div><div><b>DIGITAL TELEVISION SOLUTION</b><small>Broadcast Control Room</small></div></div>
+      <div className="brand"><div className="logo">CTV</div><div><b>CHEMCHEM TV KENYA</b><small>Professional Broadcast Control Room</small></div></div>
       <div className={"air "+(live?"on":"")}><i/> {live?"ON AIR":"STANDBY"}</div>
       <div className="actions"><span>● System Ready</span><button className="go" onClick={toggleLive}>{live?"STOP LIVE":"GO LIVE"}</button></div>
     </header>
@@ -673,17 +673,17 @@ function News({notify}:{notify:(x:string)=>void}){
       </div>}
       <div className="ticker"><strong>TOP STORIES</strong><div><span>{ticker?tickerText:"Ticker disabled"}</span><span>{ticker?tickerText:"Ticker disabled"}</span></div></div>
       <div className="newsControls"><select value={category} onChange={e=>setCategory(e.target.value)}>{["Kenya","Africa","World","Sports","Business","Entertainment","Weather"].map(x=><option key={x}>{x}</option>)}</select>
-      <select value={source} onChange={e=>setSource(e.target.value)}>{["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD"].map(x=><option key={x}>{x}</option>)}</select>
+      <select value={source} onChange={e=>setSource(e.target.value)}>{["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD","BBC SPORT","STANDARD SPORTS","OPEN-METEO WEATHER"].map(x=><option key={x}>{x}</option>)}</select>
       <label><input type="checkbox" checked={autoVoice} onChange={e=>setAutoVoice(e.target.checked)}/> AUTO VOICE</label><label><input type="checkbox" checked={ticker} onChange={e=>setTicker(e.target.checked)}/> TICKER</label><label><input type="checkbox" checked={showLowerThird} onChange={e=>setShowLowerThird(e.target.checked)}/> LOWER THIRDS</label><label><input type="checkbox" checked={breaking} onChange={e=>setBreaking(e.target.checked)}/> BREAKING STYLE</label><label><input type="checkbox" checked={showClock} onChange={e=>setShowClock(e.target.checked)}/> CLOCK</label><input aria-label="Ticker text" value={tickerText} onChange={e=>setTickerText(e.target.value)} /><span>Refresh {refresh} min</span><select value={voiceEngine} onChange={e=>{const v=e.target.value as "kokoro"|"browser";setVoiceEngine(v);setVoiceName(v==="kokoro"?"af_bella":"")}}><option value="kokoro">Kokoro Neural AI — FREE</option><option value="browser">Browser Voice (fallback)</option></select><select value={voiceName} onChange={e=>setVoiceName(e.target.value)}>{voiceEngine==="kokoro" ? <><option value="af_bella">Bella — American Female</option><option value="af_heart">Heart — American Female</option><option value="am_fenrir">Fenrir — American Male</option></> : <><option value="">Best English voice</option>{voiceOptions.map(v=><option key={v.name+"-"+v.lang} value={v.name}>{v.name} ({v.lang})</option>)}</>}</select></div>
     </div>
     <div className="buttons">
       <button onClick={()=>{if(!items.length){notify("No headline available");return}const next=(selected+1)%items.length;setSelected(next);if(autoVoice)speakHeadline(items[next])}}>▶ Next + Read</button>
       <button onClick={()=>current?speakHeadline(current):notify("No headline available")}>🔊 Read Current</button>
       <button onClick={stopVoice}>■ Stop Voice</button>
-      <button onClick={async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category),{cache:"no-store"});const j=await r.json();setItems(j.items||[]);setSelected(0);notify("Loaded "+(j.items||[]).length+" headlines")}catch{notify("News refresh failed")}finally{setLoading(false)}}}>↻ Refresh Now</button>
+      <button onClick={async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category),{cache:"no-store"});const j=await r.json();const nextItems=j.items||[];setItems(nextItems);setSelected(0);if(nextItems.length)setTickerText(nextItems.slice(0,4).map((x:{title:string})=>x.title).join(" • "));notify("Loaded "+nextItems.length+" headlines")}catch{notify("News refresh failed")}finally{setLoading(false)}}}>↻ Refresh Now</button>
     </div>
   </div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>
-    {["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD"].map(s=><div className="health" key={s}><span>{s}</span><b>{source===s?"ACTIVE":"Ready"}</b></div>)}
+    {["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD","BBC SPORT","STANDARD SPORTS","OPEN-METEO WEATHER"].map(s=><div className="health" key={s}><span>{s}</span><b>{source===s?"ACTIVE":"Ready"}</b></div>)}
     <div className="panel" style={{marginTop:12}}><div className="title"><b>NEWS ANCHOR VOICE</b><em>{speaking?"ON AIR":"READY"}</em></div><p className="muted">Professional AI newsroom delivery. Free Kokoro Neural speech runs in the browser using WebGPU with WASM fallback. No paid API or account is required. The first use downloads the neural model and voice assets, then the browser caches them.</p><div className="health"><span>VOICE ENGINE</span><b>{voiceEngine==="kokoro"?"Kokoro Neural AI (free/local)":"English browser voices"}</b></div></div>
   </div></div>
 }
@@ -694,9 +694,11 @@ function Streaming({connected,setConnected,live}:{connected:Record<string,boolea
 }
 
 function Analytics({live,program,streamStartedAt,totalViews,peakViewers,connected}:{live:boolean;program:MediaFile|null;streamStartedAt:number|null;totalViews:number;peakViewers:number;connected:Record<string,boolean>}){
-  const duration=streamStartedAt?Math.max(0,Math.floor((Date.now()-streamStartedAt)/1000)):0;const fmt=(s:number)=>String(Math.floor(s/3600)).padStart(2,"0")+":"+String(Math.floor(s%3600/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");const outputs=Object.values(connected).filter(Boolean).length;return <div><div className="cards">{[["Live Viewers",live?"1":"0"],["Total Views",String(totalViews)],["Program",program?.name||"Standby"],["Followers","—"],["Peak Viewers",String(peakViewers)],["Health",live?"Stable":"Standby"],["Stream Time",fmt(duration)],["Outputs",String(outputs)]].map(x=><div className="metric" key={x[0]}><small>{x[0]}</small><strong>{x[1]}</strong><span>{live?"Live now":"Today"}</span></div>)}</div><div className="panel" style={{marginTop:12}}><div className="title"><b>OUTPUT HEALTH</b></div>{Object.entries(connected).map(([name,on])=><div className="health" key={name}><span>{name}</span><b>{on?(live?"LIVE":"READY"):"OFFLINE"}</b></div>)}</div></div>
+  const [now,setNow]=useState(Date.now());
+  useEffect(()=>{const id=window.setInterval(()=>setNow(Date.now()),1000);return()=>window.clearInterval(id)},[]);
+  const duration=streamStartedAt?Math.max(0,Math.floor((now-streamStartedAt)/1000)):0;const fmt=(s:number)=>String(Math.floor(s/3600)).padStart(2,"0")+":"+String(Math.floor(s%3600/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");const outputs=Object.values(connected).filter(Boolean).length;return <div><div className="cards">{[["Live Viewers",live?"1":"0"],["Total Views",String(totalViews)],["Program",program?.name||"Standby"],["Followers","—"],["Peak Viewers",String(peakViewers)],["Health",live?"Stable":"Standby"],["Stream Time",fmt(duration)],["Outputs",String(outputs)]].map(x=><div className="metric" key={x[0]}><small>{x[0]}</small><strong>{x[1]}</strong><span>{live?"Live now":"Today"}</span></div>)}</div><div className="panel" style={{marginTop:12}}><div className="title"><b>OUTPUT HEALTH</b></div>{Object.entries(connected).map(([name,on])=><div className="health" key={name}><span>{name}</span><b>{on?(live?"LIVE":"READY"):"OFFLINE"}</b></div>)}</div></div>
 }
 
 function Settings({notify}:{notify:(x:string)=>void}){
-  return <div className="panel full"><div className="title"><b>SYSTEM SETTINGS</b></div><div className="settings"><button onClick={()=>notify("Broadcast Engine settings opened")}>Broadcast Engine</button><button onClick={()=>notify("Cloud Media settings opened")}>Cloud Media</button><button onClick={()=>notify("Platform authentication opened")}>Platform Accounts</button><button onClick={()=>notify("Failsafe settings opened")}>Failsafe & Recovery</button></div><p className="muted">OBS-style control is separated into Preview and Program. Real platform credentials, cloud storage and Android publishing will be connected in later stages.</p></div>
+  return <div className="panel full"><div className="title"><b>SYSTEM SETTINGS</b></div><div className="settings"><button onClick={()=>notify("Broadcast Engine settings opened")}>Broadcast Engine</button><button onClick={()=>notify("Cloud Media settings opened")}>Cloud Media</button><button onClick={()=>notify("Platform authentication opened")}>Platform Accounts</button><button onClick={()=>notify("Failsafe settings opened")}>Failsafe & Recovery</button></div><p className="muted">OBS-style control is separated into Preview and Program. The browser control room handles studio, automation, newsroom, media, scheduling and broadcast graphics. For real multi-platform RTMP delivery, connect a dedicated encoder such as OBS or FFmpeg and keep platform stream keys outside the browser.</p></div>
 }

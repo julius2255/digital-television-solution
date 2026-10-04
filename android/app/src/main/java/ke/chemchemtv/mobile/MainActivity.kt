@@ -16,6 +16,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.pedro.common.ConnectChecker
 import com.pedro.library.rtmp.RtmpStream
+import com.pedro.encoder.input.sources.video.Camera2Source
+import com.pedro.encoder.input.sources.audio.MicrophoneSource
 import com.pedro.library.view.OpenGlView
 
 class MainActivity : AppCompatActivity(), ConnectChecker {
@@ -130,9 +132,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
   private fun initializeStreamingEngine() {
     if (::stream.isInitialized) return
-    stream = RtmpStream(this, this)
+    stream = RtmpStream(this, this, Camera2Source(this), MicrophoneSource())
     val videoPrepared = try {
-      stream.prepareVideo(1920, 1080, 4500 * 1000, 30)
+      stream.prepareVideo(1280, 720, 3500 * 1000, 30)
     } catch (e: Exception) {
       Log.e("CHEMCHEM_RTMP", "Video preparation failed", e)
       false
@@ -145,8 +147,16 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
     encodersReady = videoPrepared && audioPrepared
     if (encodersReady) {
-      diagnostics.text = "Engine diagnostics: H.264 1080p30 + AAC 44.1kHz ready"
+      diagnostics.text = "Engine diagnostics: H.264 720p30 + AAC 44.1kHz ready • Camera2 source active"
       stream.startPreview(previewView)
+      if (!stream.isOnPreview) {
+        encodersReady = false
+        diagnostics.text = "Engine diagnostics: camera preview could not start"
+        status.text = "● CAMERA ERROR"
+        status.setTextColor(Color.rgb(255, 80, 90))
+        goButton.isEnabled = false
+        return
+      }
       goButton.isEnabled = true
       status.text = "● READY — CAMERA/AUDIO ENGINE INITIALIZED"
       status.setTextColor(Color.rgb(102, 221, 136))
@@ -201,7 +211,15 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       Toast.makeText(this, "Use a valid rtmps:// or rtmp:// ingest endpoint", Toast.LENGTH_LONG).show()
       return
     }
-    diagnostics.text = "RTMPS handshake starting"
+    diagnostics.text = "RTMPS handshake starting • Video source: Camera2 1280x720"
+    if (!stream.isOnPreview) {
+      stream.startPreview(previewView)
+    }
+    if (!stream.isOnPreview) {
+      diagnostics.text = "RTMP ERROR: camera preview did not start; no video can be sent"
+      Toast.makeText(this, "Camera video could not start", Toast.LENGTH_LONG).show()
+      return
+    }
     stream.startStream(endpoint)
     setLiveButton(false)
     status.text = "● CONNECTING TO FACEBOOK..."

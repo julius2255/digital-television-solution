@@ -897,7 +897,7 @@ function Streaming({connected,setConnected,live}:{connected:Record<string,boolea
       <p>✓ Target · {resolution} · {fps} FPS · {bitrate} kbps</p>
       <div className="health"><span>RTMP delivery</span><b>{connected.Facebook?(live?"ENGINE READY":"CONNECTED"): "OFFLINE"}</b></div>
       <p className="muted">Important: a configured destination is not the same as a successful encoder connection. The Android engine must receive the ingest endpoint and report <b>onConnectionSuccess</b> before we label the stream truly LIVE.</p>
-      <p className="muted">RootEncoder supports hardware H.264/AAC and RTMP/RTMPS transport, so the same engine can handle Facebook plus other RTMP destinations. citeturn0search2</p>
+      <p className="muted">RootEncoder supports hardware H.264/AAC and RTMP/RTMPS transport, so the same engine can handle Facebook plus other RTMP destinations.</p>
     </div>
   </div>
 }

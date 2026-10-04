@@ -754,56 +754,120 @@ function Streaming({connected,setConnected,live}:{connected:Record<string,boolea
   const [health,setHealth]=useState<"Stable"|"Warning">("Stable");
   const [rtmpServer,setRtmpServer]=useState("");
   const [streamKey,setStreamKey]=useState("");
+  const [fullIngestUrl,setFullIngestUrl]=useState("");
   const [showKey,setShowKey]=useState(false);
+  const [fbUser,setFbUser]=useState<{id:string;name:string}|null>(null);
+  const [fbPages,setFbPages]=useState<Array<{id:string;name:string;category?:string}>>([]);
+  const [fbPageId,setFbPageId]=useState("");
+  const [fbBusy,setFbBusy]=useState(false);
+  const [fbLiveId,setFbLiveId]=useState("");
+  const [fbError,setFbError]=useState("");
+  const [fbMessage,setFbMessage]=useState("");
 
-  useEffect(()=>{try{
+  const loadFacebook=async()=>{
+    try{
+      const r=await fetch("/api/facebook/pages",{cache:"no-store"});
+      const j=await r.json();
+      if(j.connected){setFbUser(j.user||null);setFbPages(j.pages||[]);setFbPageId(v=>v||(j.pages?.[0]?.id||""))}
+    }catch{}
+  };
+  useEffect(()=>{loadFacebook();try{
     const s=localStorage.getItem("dtv-rtmp-server");
     const k=localStorage.getItem("dtv-stream-key");
+    const u=localStorage.getItem("dtv-full-ingest-url");
     const b=localStorage.getItem("dtv-bitrate");
     const f=localStorage.getItem("dtv-fps");
     const q=localStorage.getItem("dtv-resolution");
-    if(s)setRtmpServer(s);if(k)setStreamKey(k);if(b)setBitrate(Number(b));if(f)setFps(Number(f));if(q)setResolution(q);
+    if(s)setRtmpServer(s);if(k)setStreamKey(k);if(u)setFullIngestUrl(u);if(b)setBitrate(Number(b));if(f)setFps(Number(f));if(q)setResolution(q);
   }catch{}},[]);
-
   useEffect(()=>{try{
     localStorage.setItem("dtv-rtmp-server",rtmpServer);
     localStorage.setItem("dtv-stream-key",streamKey);
+    localStorage.setItem("dtv-full-ingest-url",fullIngestUrl);
     localStorage.setItem("dtv-bitrate",String(bitrate));
     localStorage.setItem("dtv-fps",String(fps));
     localStorage.setItem("dtv-resolution",resolution);
-  }catch{}},[rtmpServer,streamKey,bitrate,fps,resolution]);
-
+  }catch{}},[rtmpServer,streamKey,fullIngestUrl,bitrate,fps,resolution]);
   useEffect(()=>{if(!live){setHealth("Stable");return;}const id=window.setInterval(()=>setHealth(navigator.onLine?"Stable":"Warning"),3000);return()=>window.clearInterval(id)},[live]);
 
-  const toggleDestination=(name:string)=>{
-    if(!rtmpServer.trim()||!streamKey.trim()){
-      alert("Enter the RTMP server URL and stream key first.");
-      return;
-    }
-    setConnected({...connected,[name]:!connected[name]});
-  };
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    const state=params.get("facebook");
+    const message=params.get("message");
+    if(state==="connected"){setFbMessage("Facebook account connected successfully.");loadFacebook();window.history.replaceState({},document.title,window.location.pathname)}
+    if(state==="error"){setFbError(message||"Facebook connection failed.");window.history.replaceState({},document.title,window.location.pathname)}
+  },[]);
 
-  const goLive=()=>{
-    if(!rtmpServer.trim()||!streamKey.trim()){
-      alert("Enter the RTMP server URL and stream key first.");
-      return;
-    }
-    if(!live){
-      alert("The native CHEMCHEM broadcast engine must be running on the Android device. This control room does not use OBS.");
-      return;
-    }
+  const connectFacebook=()=>{window.location.href="/api/facebook/start"};
+  const disconnectFacebook=async()=>{
+    try{await fetch("/api/facebook/disconnect",{method:"POST"});}catch{}
+    setFbUser(null);setFbPages([]);setFbPageId("");setFbLiveId("");setFullIngestUrl("");setFbMessage("Facebook disconnected.");
+  };
+  const createFacebookLive=async()=>{
+    if(!fbPageId){setFbError("Connect Facebook and select the Page first.");return;}
+    setFbBusy(true);setFbError("");setFbMessage("");
+    try{
+      const r=await fetch("/api/facebook/live",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({pageId:fbPageId,title:"CHEMCHEM TV KENYA LIVE",description:"Live broadcast from CHEMCHEM TV KENYA"})});
+      const j=await r.json();
+      if(!r.ok)throw new Error(j.error||"Facebook could not create the live broadcast.");
+      setFbLiveId(j.liveVideoId||"");
+      setFullIngestUrl(j.streamUrl||"");
+      setConnected({...connected,Facebook:true});
+      setFbMessage("Facebook created the live session. The generated RTMPS ingest URL is ready for the CHEMCHEM encoder.");
+    }catch(e){setFbError(e instanceof Error?e.message:"Facebook Live setup failed.");}
+    finally{setFbBusy(false)}
+  };
+  const useManualRtmp=()=>{
+    setFullIngestUrl("");
+    if(!rtmpServer.trim()||!streamKey.trim()){setFbError("Enter both the RTMP/RTMPS server URL and stream key.");return;}
     setConnected({...connected,Facebook:true});
+    setFbMessage("Manual RTMP destination saved. The Android encoder must report a real connection before GO LIVE turns green.");
+  };
+  const copyIngest=async()=>{
+    if(!fullIngestUrl)return;
+    try{await navigator.clipboard.writeText(fullIngestUrl);setFbMessage("Facebook RTMPS ingest URL copied.");}catch{setFbError("Copy was blocked by the browser. Select and copy the URL manually.");}
+  };
+  const goLive=()=>{
+    if(!live){setFbError("Start CHEMCHEM TV KENYA ON AIR first, then start the native Android broadcast engine.");return;}
+    if(!connected.Facebook){setFbError("Connect Facebook or configure a manual RTMP destination first.");return;}
+    setFbMessage("GO LIVE is armed. The green live state will come from the native encoder's successful RTMPS connection.");
   };
 
   return <div className="two">
     <div className="panel">
       <div className="title"><b>STREAMING OUTPUTS</b><em>{live?"PROGRAM READY":"STANDBY"}</em></div>
-      {Object.keys(connected).map(x=><div className="dest" key={x}>
-        <div><b>{x}</b><small>{connected[x]?"CONNECTED · RTMP DESTINATION READY":"Not configured"}</small></div>
-        <button className={connected[x]?"connectedButton":""} onClick={()=>toggleDestination(x)}>{connected[x]?"✓ CONNECTED":"CONNECT"}</button>
-      </div>)}
+      <div className="panel" style={{marginBottom:12}}>
+        <div className="title"><b>FACEBOOK ACCOUNT</b><em>{fbUser?"CONNECTED":"NOT CONNECTED"}</em></div>
+        {fbUser?<><p className="muted">Signed in as <b>{fbUser.name}</b>. Select the Facebook Page that CHEMCHEM should broadcast to.</p>
+          <div className="streamControls">
+            <label>Facebook Page<select value={fbPageId} onChange={e=>setFbPageId(e.target.value)}>{fbPages.length?fbPages.map(p=><option key={p.id} value={p.id}>{p.name}</option>):<option value="">No Pages returned</option>}</select></label>
+          </div>
+          <div className="buttons">
+            <button className="connectedButton" onClick={createFacebookLive} disabled={fbBusy}>{fbBusy?"CREATING LIVE...":"CREATE FACEBOOK LIVE"}</button>
+            <button onClick={disconnectFacebook}>DISCONNECT</button>
+          </div>
+        </>:<><p className="muted">Connect your Facebook account securely with Meta Login. CHEMCHEM will request access to Pages you manage and can create a Facebook Live ingest session for the selected Page.</p><button className="big" onClick={connectFacebook}>CONNECT FACEBOOK ACCOUNT</button></>}
+        {fbMessage&&<p className="muted">✓ {fbMessage}</p>}
+        {fbError&&<p style={{color:"#ff6b78"}}>⚠ {fbError}</p>}
+      </div>
 
-      <div className="streamControls">
+      <div className="panel" style={{marginBottom:12}}>
+        <div className="title"><b>FACEBOOK LIVE INGEST</b><em>{fbLiveId?"SESSION CREATED":"READY"}</em></div>
+        <p className="muted">When Facebook creates a Live session, it returns the actual RTMPS ingest endpoint. Use that complete endpoint in the Android CHEMCHEM encoder; do not append another stream key to it.</p>
+        <label>Facebook generated RTMPS ingest URL<input value={fullIngestUrl} onChange={e=>setFullIngestUrl(e.target.value)} placeholder="Generated after CREATE FACEBOOK LIVE"/></label>
+        <div className="buttons"><button onClick={copyIngest} disabled={!fullIngestUrl}>COPY INGEST URL</button></div>
+      </div>
+
+      <div className="panel">
+        <div className="title"><b>MANUAL RTMP / RTMPS</b><em>FALLBACK</em></div>
+        <p className="muted">You can still use any platform that gives you a normal RTMP/RTMPS server URL and stream key.</p>
+        <label>RTMP server URL<input value={rtmpServer} onChange={e=>setRtmpServer(e.target.value)} placeholder="rtmps://platform-server/live"/></label>
+        <label>Stream key<input type={showKey?"text":"password"} value={streamKey} onChange={e=>setStreamKey(e.target.value)} placeholder="Platform stream key"/></label>
+        <label><input type="checkbox" checked={showKey} onChange={e=>setShowKey(e.target.checked)}/> Show stream key</label>
+        <button onClick={useManualRtmp}>USE MANUAL RTMP</button>
+      </div>
+
+      <div className="streamControls" style={{marginTop:12}}>
         <label>Resolution <select value={resolution} onChange={e=>setResolution(e.target.value)}><option>1920x1080</option><option>1280x720</option></select></label>
         <label>Frame rate <select value={fps} onChange={e=>setFps(Number(e.target.value))}><option value={30}>30 FPS</option><option value={25}>25 FPS</option><option value={60}>60 FPS</option></select></label>
         <label>Target bitrate <input type="range" min="1000" max="9000" step="500" value={bitrate} onChange={e=>setBitrate(Number(e.target.value))}/><b>{bitrate} kbps</b></label>
@@ -812,37 +876,28 @@ function Streaming({connected,setConnected,live}:{connected:Record<string,boolea
       </div>
 
       <div className="panel" style={{marginTop:12}}>
-        <div className="title"><b>CHEMCHEM BROADCAST ENGINE</b><em>{connected.Facebook?"FACEBOOK CONNECTED":"READY"}</em></div>
-        <p className="muted">No OBS or third-party encoder is required. The Android CHEMCHEM broadcast engine handles H.264/AAC encoding and sends the Program feed directly to the RTMP/RTMPS destination.</p>
-        <label>RTMP server URL<input value={rtmpServer} onChange={e=>setRtmpServer(e.target.value)} placeholder="rtmps://platform-server/live"/></label>
-        <label>Stream key<input type={showKey?"text":"password"} value={streamKey} onChange={e=>setStreamKey(e.target.value)} placeholder="Enter the platform stream key"/></label>
-        <label><input type="checkbox" checked={showKey} onChange={e=>setShowKey(e.target.checked)}/> Show stream key</label>
+        <div className="title"><b>CHEMCHEM BROADCAST ENGINE</b><em>{connected.Facebook?(live?"LIVE ARMED":"DESTINATION READY"):"READY"}</em></div>
+        <p className="muted">No OBS is used. The Android CHEMCHEM engine captures, hardware-encodes H.264/AAC and publishes directly over RTMP or RTMPS.</p>
         <div className="buttons">
-          <button onClick={()=>toggleDestination("Facebook")} className={connected.Facebook?"connectedButton":"big"}>{connected.Facebook?"✓ FACEBOOK CONNECTED":"CONNECT FACEBOOK"}</button>
-          <button onClick={goLive} className={live&&connected.Facebook?"liveButton":"big"}>{live&&connected.Facebook?"● LIVE — CONNECTED":"GO LIVE"}</button>
+          <button onClick={goLive} className={live&&connected.Facebook?"liveButton":"big"}>{live&&connected.Facebook?"● GO LIVE — ENGINE READY":"GO LIVE"}</button>
         </div>
-      </div>
-
-      <div className="panel" style={{marginTop:12}}>
-        <div className="title"><b>HOW DIRECT STREAMING WORKS</b></div>
-        <p>1. Get the current RTMPS Server URL and Stream Key from the platform's Live Producer.</p>
-        <p>2. Enter them above and connect the destination.</p>
-        <p>3. Start CHEMCHEM TV KENYA ON AIR.</p>
-        <p>4. Tap GO LIVE. The Android broadcast engine encodes and sends the Program feed directly.</p>
       </div>
     </div>
 
     <div className="panel">
       <div className="title"><b>BROADCAST ENGINE STATUS</b></div>
       <p>✓ Program feed · {live?"READY":"STANDBY"}</p>
-      <p>✓ Encoder configuration · {rtmpServer&&streamKey?"READY":"WAITING"}</p>
-      <p>✓ RTMP destination · {connected.Facebook?"FACEBOOK CONNECTED":"NOT CONNECTED"}</p>
+      <p>✓ Facebook account · {fbUser?"CONNECTED":"NOT CONNECTED"}</p>
+      <p>✓ Live session · {fbLiveId?"CREATED":"NOT CREATED"}</p>
+      <p>✓ Encoder configuration · {fullIngestUrl||rtmpServer&&streamKey?"READY":"WAITING"}</p>
+      <p>✓ RTMP destination · {connected.Facebook?"CONFIGURED":"NOT CONFIGURED"}</p>
       <p>✓ Automatic reconnect · {autoReconnect?"ON":"OFF"}</p>
       <p>✓ Internet-loss detection · {health}</p>
       <p>✓ Standby fallback · {standby?"ON":"OFF"}</p>
       <p>✓ Target · {resolution} · {fps} FPS · {bitrate} kbps</p>
-      <div className="health"><span>RTMP delivery</span><b>{connected.Facebook?(live?"LIVE READY":"CONNECTED"):"OFFLINE"}</b></div>
-      <p className="muted">The green CONNECTED state means the destination profile is configured in CHEMCHEM. The Android broadcast engine is the component that establishes the real RTMPS connection and reports its live encoder status.</p>
+      <div className="health"><span>RTMP delivery</span><b>{connected.Facebook?(live?"ENGINE READY":"CONNECTED"): "OFFLINE"}</b></div>
+      <p className="muted">Important: a configured destination is not the same as a successful encoder connection. The Android engine must receive the ingest endpoint and report <b>onConnectionSuccess</b> before we label the stream truly LIVE.</p>
+      <p className="muted">RootEncoder supports hardware H.264/AAC and RTMP/RTMPS transport, so the same engine can handle Facebook plus other RTMP destinations. citeturn0search2</p>
     </div>
   </div>
 }

@@ -819,8 +819,8 @@ function Streaming({connected,setConnected,live}:{connected:Record<string,boolea
 
       <div className="panel" style={{marginTop:12}}>
         <div className="title"><b>CHEMCHEM BROADCAST ENGINE</b><em>{connected.Facebook?(live?"DESTINATION READY":"CONNECTED"):"READY"}</em></div>
-        <p className="muted">The Android CHEMCHEM engine captures the Program, hardware-encodes H.264/AAC and publishes directly over RTMPS. A green LIVE state is shown only after the encoder reports a successful connection.</p>
-        <div className="buttons"><button onClick={goLive} className={live&&connected.Facebook?"liveButton":"big"}>{live&&connected.Facebook?"● GO LIVE — ENGINE READY":"GO LIVE"}</button></div>
+        <p className="muted">This browser control room prepares the destination. The actual program encoding and RTMPS connection happen in the CHEMCHEM Android encoder. Entering a URL and key alone never means LIVE.</p>
+        <div className="buttons"><button onClick={goLive} className="big">OPEN ANDROID ENCODER</button></div>
       </div>
     </div>
 
@@ -833,7 +833,7 @@ function Streaming({connected,setConnected,live}:{connected:Record<string,boolea
       <p>✓ Internet-loss detection · {health}</p>
       <p>✓ Standby fallback · {standby?"ON":"OFF"}</p>
       <p>✓ Target · {resolution} · {fps} FPS · {bitrate} kbps</p>
-      <div className="health"><span>RTMP delivery</span><b>{connected.Facebook?(live?"READY TO SEND":"CONFIGURED"):"OFFLINE"}</b></div>
+      <div className="health"><span>RTMP delivery</span><b>{connected.Facebook?"ANDROID ENCODER REQUIRED":"OFFLINE"}</b></div>
       <p className="muted">Facebook's Live Producer page must remain open for the current broadcast. Start the CHEMCHEM Android encoder after pasting the current Server URL and Stream Key. Facebook should then show the incoming preview. Facebook Live Producer (facebook.com/live/producer)</p>
       <p className="muted">If the Android app reports CONNECTION FAILED, use the exact error shown there; the system will no longer label a failed connection as LIVE.</p>
     </div>

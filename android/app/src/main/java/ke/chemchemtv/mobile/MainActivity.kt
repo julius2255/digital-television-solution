@@ -25,6 +25,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private lateinit var key: EditText
   private lateinit var goButton: Button
   private lateinit var diagnostics: TextView
+  private lateinit var programLabel: TextView
+  private lateinit var programSource: TextView
   private var streaming = false
   private var encodersReady = false
   private lateinit var previewView: OpenGlView
@@ -55,6 +57,20 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
     controls.addView(server)
     controls.addView(key)
+    programLabel = TextView(this).apply {
+      text = "PROGRAM: Standby"
+      setTextColor(Color.WHITE)
+      textSize = 16f
+      setPadding(0, 8, 0, 0)
+    }
+    controls.addView(programLabel)
+    programSource = TextView(this).apply {
+      text = "SOURCE: Waiting for control room"
+      setTextColor(Color.LTGRAY)
+      textSize = 13f
+      setPadding(0, 2, 0, 4)
+    }
+    controls.addView(programSource)
     diagnostics = TextView(this).apply {
       text = "Engine diagnostics: waiting"
       setTextColor(Color.LTGRAY)
@@ -78,6 +94,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     controls.addView(row)
     root.addView(controls, LinearLayout.LayoutParams(-1, -2))
     setContentView(root)
+    handleEncoderIntent(intent)
 
     if (hasPermissions()) {
       initializeStreamingEngine()
@@ -88,6 +105,27 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       diagnostics.text = "Grant camera and microphone permissions to initialize the encoder"
       ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO), 10)
     }
+  }
+
+  override fun onNewIntent(intent: android.content.Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    handleEncoderIntent(intent)
+  }
+
+  private fun handleEncoderIntent(intent: android.content.Intent?) {
+    if (intent == null) return
+    val data = intent.data
+    val serverValue = data?.getQueryParameter("server")
+    val keyValue = data?.getQueryParameter("key")
+    val program = data?.getQueryParameter("program")
+    val source = data?.getQueryParameter("source")
+    if (serverValue.isNullOrBlank() && program.isNullOrBlank()) return
+    if (!serverValue.isNullOrBlank()) server.setText(serverValue)
+    if (!keyValue.isNullOrBlank()) key.setText(keyValue)
+    programLabel.text = "PROGRAM: " + (program ?: "Standby")
+    programSource.text = "SOURCE: " + (source ?: "Standby") + " • Facebook RTMPS ready"
+    diagnostics.text = "Control room handoff received. Program: " + (program ?: "Standby")
   }
 
   private fun initializeStreamingEngine() {

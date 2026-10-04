@@ -493,7 +493,7 @@ function News({notify}:{notify:(x:string)=>void}){
   const [category,setCategory]=useState("Kenya"); const [source,setSource]=useState("TUKO NEWS");
   const [autoVoice,setAutoVoice]=useState(true); const [ticker,setTicker]=useState(true); const [refresh,setRefresh]=useState(5);
   const [items,setItems]=useState<{title:string;description:string;link:string;published:string}[]>([]);
-  const [loading,setLoading]=useState(false); const [selected,setSelected]=useState(0); const [speaking,setSpeaking]=useState(false); const [voiceName,setVoiceName]=useState("en-US-AriaNeural"); const [voiceOptions,setVoiceOptions]=useState<SpeechSynthesisVoice[]>([]); const [voiceEngine,setVoiceEngine]=useState<"kokoro"|"browser">("kokoro"); const audioRef=useRef<HTMLAudioElement|null>(null); const kokoroRef=useRef<any>(null); const audioContextRef=useRef<AudioContext|null>(null);
+  const [loading,setLoading]=useState(false); const [selected,setSelected]=useState(0); const [speaking,setSpeaking]=useState(false); const [voiceName,setVoiceName]=useState("en-US-AriaNeural"); const [voiceOptions,setVoiceOptions]=useState<SpeechSynthesisVoice[]>([]); const [voiceEngine,setVoiceEngine]=useState<"kokoro"|"browser">("kokoro"); const audioRef=useRef<HTMLAudioElement|null>(null); const kokoroRef=useRef<any>(null);
   const stripMarkup=(value:string)=>{
     if(!value)return "";
     const box=document.createElement("div");
@@ -528,29 +528,40 @@ function News({notify}:{notify:(x:string)=>void}){
     const text=("This is Digital Television Solution News. "+headline+(description?". "+description:"")).replace(/\\s+/g," ").trim();
     try{
       setSpeaking(true);
-      notify(kokoroRef.current?"Generating clean AI newsroom voice…":"Loading free AI newsroom voice for the first time…");
       if(!kokoroRef.current){
-        const mod=await import("kokoro-js");
-        const useGpu=typeof navigator!=="undefined" && "gpu" in navigator;
-        kokoroRef.current=await mod.KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX",{dtype:"q8",device:useGpu?"webgpu":"wasm"});
+        notify("Loading free neural newsroom voice… first load can take a little time.");
+        const mod=await import("@met4citizen/headtts");
+        const engine=new mod.HeadTTS({
+          endpoints:["webgpu","wasm"],
+          languages:["en-us"],
+          voices:["af_bella"],
+          workerModule:"https://cdn.jsdelivr.net/npm/@met4citizen/headtts@1.3/modules/worker-tts.mjs",
+          dictionaryURL:"https://cdn.jsdelivr.net/npm/@met4citizen/headtts@1.3/dictionaries/"
+        });
+        await engine.connect();
+        engine.setup({voice:voiceName||"af_bella",language:"en-us",speed:0.95,audioEncoding:"wav"});
+        kokoroRef.current=engine;
+      }else{
+        kokoroRef.current.setup({voice:voiceName||"af_bella",language:"en-us",speed:0.95,audioEncoding:"wav"});
       }
-      const audio=await kokoroRef.current.generate(text,{voice:voiceName||"af_heart",speed:0.92});
+      const messages=await kokoroRef.current.synthesize({input:text});
+      const audioMessage=messages.find((m:any)=>m.type==="audio");
+      if(!audioMessage?.data)throw new Error("Neural voice generated no audio");
+      const data=audioMessage.data;
+      let bytes:any=data;
+      if(data instanceof ArrayBuffer)bytes=new Uint8Array(data);
+      const blob=new Blob([bytes],{type:"audio/wav"});
       if(audioRef.current){audioRef.current.pause();audioRef.current.src="";}
-      if(!audioContextRef.current)audioContextRef.current=new AudioContext();
-      const ctx=audioContextRef.current;
-      if(ctx.state==="suspended")await ctx.resume();
-      const buffer=ctx.createBuffer(1,audio.data.length,audio.sample_rate);
-      buffer.getChannelData(0).set(audio.data);
-      const source=ctx.createBufferSource();
-      source.buffer=buffer;
-      source.connect(ctx.destination);
-      audioRef.current={pause:()=>{try{source.stop()}catch{}},currentTime:0,src:""} as any;
-      source.onended=()=>setSpeaking(false);
-      source.start(0);
-      notify("AI NEWS ANCHOR: Kokoro Neural Voice");
+      const url=URL.createObjectURL(blob);
+      const audio=new Audio(url);
+      audioRef.current=audio;
+      audio.onended=()=>{setSpeaking(false);URL.revokeObjectURL(url)};
+      audio.onerror=()=>{setSpeaking(false);URL.revokeObjectURL(url);notify("Neural audio playback failed")};
+      await audio.play();
+      notify("AI NEWS ANCHOR: Free Kokoro Neural Voice");
     }catch(error){
       setSpeaking(false);
-      notify(error instanceof Error?error.message:"Free AI voice failed to load. Refresh and try again.");
+      notify(error instanceof Error?error.message:"Free neural voice failed. Refresh and try again.");
     }
   };
   const speakWithBrowser=(item:{title:string;description:string})=>{
@@ -578,7 +589,7 @@ function News({notify}:{notify:(x:string)=>void}){
   const speakHeadline=(item:{title:string;description:string})=>{
     if(voiceEngine==="kokoro")speakWithKokoro(item); else speakWithBrowser(item);
   };
-  const stopVoice=()=>{if(typeof window!=="undefined"&&"speechSynthesis" in window)window.speechSynthesis.cancel();if(audioRef.current){audioRef.current.pause();audioRef.current.currentTime=0;audioRef.current.src="";}if(audioContextRef.current)audioContextRef.current.suspend().catch(()=>{});setSpeaking(false)};
+  const stopVoice=()=>{if(typeof window!=="undefined"&&"speechSynthesis" in window)window.speechSynthesis.cancel();if(audioRef.current){audioRef.current.pause();audioRef.current.currentTime=0;audioRef.current.src="";}setSpeaking(false)};
   useEffect(()=>{if(typeof window==="undefined"||!("speechSynthesis" in window))return;const load=()=>setVoiceOptions(getEnglishVoices());load();window.speechSynthesis.addEventListener("voiceschanged",load);return()=>window.speechSynthesis.removeEventListener("voiceschanged",load)},[]);
   useEffect(()=>{
     const load=async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category),{cache:"no-store"});const j=await r.json();setItems(j.items||[])}catch{notify("News feed connection failed")}finally{setLoading(false)}};
@@ -594,7 +605,7 @@ function News({notify}:{notify:(x:string)=>void}){
       <div className="ticker">{ticker?"KENYA • AFRICA • WORLD • SPORTS • BUSINESS • ENTERTAINMENT":"Ticker disabled"}</div>
       <div className="newsControls"><select value={category} onChange={e=>setCategory(e.target.value)}>{["Kenya","Africa","World","Sports","Business","Entertainment","Weather"].map(x=><option key={x}>{x}</option>)}</select>
       <select value={source} onChange={e=>setSource(e.target.value)}>{["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD"].map(x=><option key={x}>{x}</option>)}</select>
-      <label><input type="checkbox" checked={autoVoice} onChange={e=>setAutoVoice(e.target.checked)}/> AUTO VOICE</label><label><input type="checkbox" checked={ticker} onChange={e=>setTicker(e.target.checked)}/> TICKER</label><span>Refresh {refresh} min</span><select value={voiceEngine} onChange={e=>{const v=e.target.value as "kokoro"|"browser";setVoiceEngine(v);setVoiceName(v==="kokoro"?"af_heart":"")}}><option value="kokoro">Kokoro Neural AI — FREE</option><option value="browser">Browser Voice (fallback)</option></select><select value={voiceName} onChange={e=>setVoiceName(e.target.value)}>{voiceEngine==="kokoro" ? <><option value="af_heart">Heart — American Female</option><option value="af_bella">Bella — American Female</option><option value="af_nicole">Nicole — American Female</option><option value="bf_emma">Emma — British Female</option><option value="bm_george">George — British Male</option></> : <><option value="">Best English voice</option>{voiceOptions.map(v=><option key={v.name+"-"+v.lang} value={v.name}>{v.name} ({v.lang})</option>)}</>}</select></div>
+      <label><input type="checkbox" checked={autoVoice} onChange={e=>setAutoVoice(e.target.checked)}/> AUTO VOICE</label><label><input type="checkbox" checked={ticker} onChange={e=>setTicker(e.target.checked)}/> TICKER</label><span>Refresh {refresh} min</span><select value={voiceEngine} onChange={e=>{const v=e.target.value as "kokoro"|"browser";setVoiceEngine(v);setVoiceName(v==="kokoro"?"af_bella":"")}}><option value="kokoro">Kokoro Neural AI — FREE</option><option value="browser">Browser Voice (fallback)</option></select><select value={voiceName} onChange={e=>setVoiceName(e.target.value)}>{voiceEngine==="kokoro" ? <><option value="af_bella">Bella — American Female</option><option value="af_heart">Heart — American Female</option><option value="am_fenrir">Fenrir — American Male</option></> : <><option value="">Best English voice</option>{voiceOptions.map(v=><option key={v.name+"-"+v.lang} value={v.name}>{v.name} ({v.lang})</option>)}</>}</select></div>
     </div>
     <div className="buttons">
       <button onClick={()=>{if(!items.length){notify("No headline available");return}const next=(selected+1)%items.length;setSelected(next);if(autoVoice)speakHeadline(items[next])}}>▶ Next + Read</button>
@@ -604,7 +615,7 @@ function News({notify}:{notify:(x:string)=>void}){
     </div>
   </div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>
     {["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD"].map(s=><div className="health" key={s}><span>{s}</span><b>{source===s?"ACTIVE":"Ready"}</b></div>)}
-    <div className="panel" style={{marginTop:12}}><div className="title"><b>NEWS ANCHOR VOICE</b><em>{speaking?"ON AIR":"READY"}</em></div><p className="muted">Professional AI newsroom delivery. Kokoro generates clean neural speech locally in your browser with no paid API or account. The first use downloads the voice model; later uses are cached. Browser speech remains available as a fallback.</p><div className="health"><span>VOICE ENGINE</span><b>{voiceEngine==="kokoro"?"Kokoro Neural AI (free/local)":"English browser voices"}</b></div></div>
+    <div className="panel" style={{marginTop:12}}><div className="title"><b>NEWS ANCHOR VOICE</b><em>{speaking?"ON AIR":"READY"}</em></div><p className="muted">Professional AI newsroom delivery. Free Kokoro Neural speech runs in the browser using WebGPU with WASM fallback. No paid API or account is required. The first use downloads the neural model and voice assets, then the browser caches them.</p><div className="health"><span>VOICE ENGINE</span><b>{voiceEngine==="kokoro"?"Kokoro Neural AI (free/local)":"English browser voices"}</b></div></div>
   </div></div>
 }
 function Streaming({connected,setConnected,live}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean}){

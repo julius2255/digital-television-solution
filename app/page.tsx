@@ -130,6 +130,14 @@ export default function Home(){
       return;
     }
     if(!row[3]){
+      if(row[2]==="Auto News"){
+        setSection("news");
+        setActiveSource("news");
+        setProgramPlaying(true);
+        setTransition("cut");
+        notify("AUTO: "+row[1]+" — Auto News is ON AIR");
+        return;
+      }
       setProgramPlaying(false);
       notify("AUTO: "+row[1]+" has no assigned media — standby fallback");
       return;
@@ -259,6 +267,21 @@ export default function Home(){
   const playNextPlaylistItem=(currentId:string)=>{const i=playlistIds.indexOf(currentId);const nextId=playlistIds[i+1];if(nextId){playPlaylistItem(nextId);return true}return false};
 
   const playScheduled=(row:string[])=>{
+    if(row[2]==="Auto News"){
+      setSection("news");
+      setActiveSource("news");
+      setPreviewMediaId("");
+      setPreviewWebUrl("");
+      setPreviewLayers([]);
+      setPreviewPlaying(true);
+      setProgramMediaId("");
+      setProgramWebUrl("");
+      setProgramLayers([]);
+      setProgramPlaying(true);
+      setTransition("cut");
+      notify("PROGRAM NOW: "+row[1]+" — Auto News is ON AIR");
+      return;
+    }
     const id=row[3];
     if(!id){notify("No video is assigned to this programme");return;}
     const media=mediaFiles.find(x=>x.id===id);
@@ -544,8 +567,8 @@ function Schedule({rows,now,auto,setAuto,setRows,add,mediaFiles,playNow,showLogo
     <div className="scheduleStatus"><span>CONTROL CLOCK <b>{now||"--:--"}</b></span><span>{currentRow?<><b>ON AIR: {currentRow[1]}</b></>:<b>ON AIR: STANDBY</b>}</span><span>{nextRow?<><b>NEXT: {nextRow[0]} · {nextRow[1]}</b></>:<b>NEXT: --</b>}</span><span>{auto?"Schedule monitoring active":"Manual scheduling"}</span></div>
     <div className="table"><div className="thead"><span>TIME</span><span>PROGRAMME</span><span>SOURCE</span><span>VIDEO / MEDIA</span><span>STATUS</span><span>ACTION</span></div>
     {rows.map((r,i)=><div className={"tr "+(r[0]===now?"current":"")} key={i}><input value={r[0]||""} onChange={e=>update(i,0,e.target.value)}/><input value={r[1]||""} onChange={e=>update(i,1,e.target.value)}/><select value={r[2]||"Video"} onChange={e=>update(i,2,e.target.value)}><option>Camera</option><option>Video</option><option>Auto News</option><option>Advertisement</option><option>Movie</option><option>Web</option></select>
-    <select value={r[3]||""} onChange={e=>update(i,3,e.target.value)} disabled={!["Video","Advertisement","Movie"].includes(r[2]||"Video")}><option value="">Select video…</option>{mediaFiles.filter(f=>f.type.startsWith("video/")).map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select><select value={showLogoMap[r[1]||""]||""} onChange={e=>setShowLogoMap({...showLogoMap,[r[1]||""]:e.target.value})} title="Logo used automatically for this show"><option value="">No show logo</option>{imageFiles.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select><em>{r[0]===now?"NOW":"Scheduled"}</em><button onClick={()=>playNow(r)} disabled={!r[3]}>▶ Play Now</button><button onClick={()=>remove(i)}>Remove</button></div>)}</div>
-    <p className="muted">Edit times and programme names, assign media, then enable AUTO. At the scheduled minute the selected media is sent to Program. PLAY NOW is available for immediate testing.</p>
+    <select value={r[3]||""} onChange={e=>update(i,3,e.target.value)} disabled={!["Video","Advertisement","Movie"].includes(r[2]||"Video")}><option value="">Select video…</option>{mediaFiles.filter(f=>f.type.startsWith("video/")).map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select><select value={showLogoMap[r[1]||""]||""} onChange={e=>setShowLogoMap({...showLogoMap,[r[1]||""]:e.target.value})} title="Logo used automatically for this show"><option value="">No show logo</option>{imageFiles.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select><em>{r[0]===now?"NOW":"Scheduled"}</em><button onClick={()=>playNow(r)} disabled={!r[3]&&r[2]!=="Auto News"&&r[2]!=="Camera"}>▶ Play Now</button><button onClick={()=>remove(i)}>Remove</button></div>)}</div>
+    <p className="muted">Edit times and programme names, assign media where required, then enable AUTO. Camera and Auto News slots can run without a media file; video slots use the selected media. PLAY NOW is available for immediate testing.</p>
   </div>
 }
 

@@ -219,3 +219,4 @@
 .newsroom.news-morning .newsStoryImage{box-shadow:inset -30px 0 45px rgba(15,87,185,.28)}
 .newsroom.news-evening .newsStoryImage{box-shadow:inset -30px 0 45px rgba(115,48,199,.25)}
 @media(max-width:620px){.newsHeadline{grid-template-columns:1fr!important}.newsStoryImage{height:150px;min-height:150px}.newsStoryImage img{min-height:150px}.newsStoryContent>b{font-size:14px!important}}
+.connectedButton{background:#20b56b!important;color:#07130d!important;font-weight:900}.liveButton{background:#19c66f!important;color:#06130b!important;font-weight:900;box-shadow:0 0 0 2px rgba(25,198,111,.2),0 0 18px rgba(25,198,111,.2)}

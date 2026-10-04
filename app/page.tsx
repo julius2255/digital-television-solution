@@ -110,7 +110,11 @@ export default function Home(){
     const row=schedule.find(r=>r[0]===scheduleClock);
     if(!row||lastAutoSlotRef.current===scheduleClock)return;
     lastAutoSlotRef.current=scheduleClock;
-    if(!row[3]){\n      setProgramPlaying(false);\n      notify("AUTO: "+row[1]+" has no assigned media — standby fallback");\n      return;\n    }
+    if(!row[3]){
+      setProgramPlaying(false);
+      notify("AUTO: "+row[1]+" has no assigned media — standby fallback");
+      return;
+    }
     const media=mediaFiles.find(f=>f.id===row[3]);
     if(!media)return;
     setPreviewMediaId(media.id);

@@ -38,11 +38,11 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       setPadding(20, 14, 20, 14)
     }
     server = EditText(this).apply {
-      hint = "RTMP server URL"
+      hint = "Facebook RTMPS server URL (from Live Producer)"
       setSingleLine(true)
     }
     key = EditText(this).apply {
-      hint = "Stream key"
+      hint = "Facebook stream key"
       setSingleLine(true)
       inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
     }
@@ -82,9 +82,14 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       Toast.makeText(this, "Enter RTMP server and stream key", Toast.LENGTH_SHORT).show()
       return
     }
-    val endpoint = if (base.endsWith("/")) base + streamKey else base + "/" + streamKey
+    val normalized = base.trimEnd()
+    val endpoint = normalized + "/" + streamKey
+    if (!endpoint.startsWith("rtmps://", ignoreCase = true) && !endpoint.startsWith("rtmp://", ignoreCase = true)) {
+      Toast.makeText(this, "Use the exact RTMPS/RTMP URL from Facebook Live Producer", Toast.LENGTH_LONG).show()
+      return
+    }
     stream.startStream(endpoint)
-    status.text = "● CONNECTING..."
+    status.text = "● CONNECTING TO FACEBOOK..."
   }
 
   private fun hasPermissions(): Boolean =

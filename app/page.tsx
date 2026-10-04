@@ -390,7 +390,7 @@ function Studio(p:{
 
   const fitCanvas=()=>{setCanvasZoom(100);setCanvasPan({x:0,y:0});panRef.current=null};
   const beginCanvasPan=(e:React.PointerEvent)=>{
-    const shouldPan=handMode||e.button===1||e.shiftKey||e.code==="Space";
+    const shouldPan=handMode||e.button===1||e.shiftKey;
     if(!shouldPan)return;
     e.preventDefault();
     panRef.current={x:canvasPan.x,y:canvasPan.y,startX:e.clientX,startY:e.clientY};

@@ -7,6 +7,7 @@ import android.text.InputType
 import android.view.Gravity
 import android.widget.*
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -19,6 +20,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private lateinit var status: TextView
   private lateinit var server: EditText
   private lateinit var key: EditText
+  private lateinit var goButton: Button
   private var streaming = false
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,12 +58,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       setTextColor(Color.rgb(102, 221, 136))
       textSize = 16f
     }
-    val go = Button(this).apply {
+    goButton = Button(this).apply {
       text = "GO LIVE"
       setOnClickListener { toggleLive() }
     }
     row.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
-    row.addView(go)
+    row.addView(goButton)
     controls.addView(row)
     root.addView(controls, LinearLayout.LayoutParams(-1, -2))
     setContentView(root)
@@ -72,9 +74,18 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     stream.startPreview(preview)
   }
 
+  private fun setLiveButton(live: Boolean) {
+    if (!::goButton.isInitialized) return
+    goButton.text = if (live) "● LIVE — CONNECTED" else "GO LIVE"
+    val color = if (live) Color.rgb(25, 198, 111) else Color.rgb(229, 43, 59)
+    goButton.background = GradientDrawable().apply { setColor(color); cornerRadius = 14f }
+    goButton.setTextColor(if (live) Color.rgb(5, 25, 14) else Color.WHITE)
+  }
+
   private fun toggleLive() {
     if (streaming) {
       stream.stopStream()
+      setLiveButton(false)
       return
     }
     val base = server.text.toString().trim()
@@ -90,6 +101,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       return
     }
     stream.startStream(endpoint)
+    setLiveButton(false)
     status.text = "● CONNECTING TO FACEBOOK..."
   }
 
@@ -98,18 +110,18 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
   override fun onConnectionStarted(url: String) { runOnUiThread { status.text = "● CONNECTING..." } }
-  override fun onConnectionSuccess() { streaming = true; runOnUiThread { status.text = "● LIVE — CONNECTED"; status.setTextColor(Color.rgb(25, 198, 111)) } }
+  override fun onConnectionSuccess() { streaming = true; runOnUiThread { status.text = "● LIVE — CONNECTED"; status.setTextColor(Color.rgb(25, 198, 111)); setLiveButton(true) } }
   override fun onConnectionFailed(reason: String) {
     streaming = false
     runOnUiThread {
       status.text = "● CONNECTION FAILED"
-      status.setTextColor(Color.rgb(255, 80, 90))
+      status.setTextColor(Color.rgb(255, 80, 90)); setLiveButton(false)
       Toast.makeText(this, reason, Toast.LENGTH_LONG).show()
     }
   }
   override fun onNewBitrate(bitrate: Long) { runOnUiThread { status.text = "● LIVE — CONNECTED  " + (bitrate / 1000) + " kbps"; status.setTextColor(Color.rgb(25, 198, 111)) } }
-  override fun onDisconnect() { streaming = false; runOnUiThread { status.text = "● READY"; status.setTextColor(Color.rgb(102, 221, 136)) } }
-  override fun onAuthError() { streaming = false; runOnUiThread { status.text = "● FACEBOOK AUTH ERROR"; status.setTextColor(Color.rgb(255, 80, 90)) } }
+  override fun onDisconnect() { streaming = false; runOnUiThread { status.text = "● READY"; status.setTextColor(Color.rgb(102, 221, 136)); setLiveButton(false) } }
+  override fun onAuthError() { streaming = false; runOnUiThread { status.text = "● FACEBOOK AUTH ERROR"; status.setTextColor(Color.rgb(255, 80, 90)); setLiveButton(false) } }
   override fun onAuthSuccess() {}
   override fun onDestroy() {
     if (::stream.isInitialized) {

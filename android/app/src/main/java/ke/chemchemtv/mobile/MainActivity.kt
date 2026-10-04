@@ -3,6 +3,7 @@ package ke.chemchemtv.mobile
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Log
 import android.text.InputType
 import android.view.Gravity
 import android.widget.*
@@ -21,6 +22,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private lateinit var server: EditText
   private lateinit var key: EditText
   private lateinit var goButton: Button
+  private lateinit var diagnostics: TextView
   private var streaming = false
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,6 +53,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
     controls.addView(server)
     controls.addView(key)
+    diagnostics = TextView(this).apply {
+      text = "Engine diagnostics: waiting"
+      setTextColor(Color.LTGRAY)
+      textSize = 13f
+      setPadding(0, 8, 0, 8)
+    }
+    controls.addView(diagnostics)
 
     val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
     status = TextView(this).apply {
@@ -69,8 +78,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     setContentView(root)
 
     stream = RtmpStream(this, this)
-    stream.prepareVideo(1920, 1080, 4500 * 1000, 30)
-    stream.prepareAudio(44100, true, 128 * 1000)
+    val videoPrepared = try { stream.prepareVideo(1920, 1080, 4500 * 1000, 30) } catch (e: Exception) { Log.e("CHEMCHEM_RTMP", "Video preparation failed", e); false }
+    val audioPrepared = try { stream.prepareAudio(44100, true, 128 * 1000) } catch (e: Exception) { Log.e("CHEMCHEM_RTMP", "Audio preparation failed", e); false }
+    diagnostics.text = if (videoPrepared && audioPrepared) "Engine diagnostics: H.264 1080p30 + AAC 44.1kHz ready" else "Engine diagnostics: encoder preparation failed"
     stream.startPreview(preview)
   }
 
@@ -103,6 +113,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       Toast.makeText(this, "Use a valid rtmps:// or rtmp:// ingest endpoint", Toast.LENGTH_LONG).show()
       return
     }
+    diagnostics.text = "RTMPS handshake starting"
     stream.startStream(endpoint)
     setLiveButton(false)
     status.text = "● CONNECTING TO FACEBOOK..."
@@ -112,19 +123,19 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED &&
     ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
-  override fun onConnectionStarted(url: String) { runOnUiThread { status.text = "● CONNECTING..." } }
-  override fun onConnectionSuccess() { streaming = true; runOnUiThread { status.text = "● LIVE — CONNECTED"; status.setTextColor(Color.rgb(25, 198, 111)); setLiveButton(true) } }
+  override fun onConnectionStarted(url: String) { runOnUiThread { status.text = "● CONNECTING..."; diagnostics.text = "RTMPS handshake started" } }
+  override fun onConnectionSuccess() { streaming = true; runOnUiThread { status.text = "● LIVE — CONNECTED"; status.setTextColor(Color.rgb(25, 198, 111)); diagnostics.text = "Facebook accepted the RTMPS connection; media is being sent"; setLiveButton(true) } }
   override fun onConnectionFailed(reason: String) {
     streaming = false
     runOnUiThread {
       status.text = "● CONNECTION FAILED"
-      status.setTextColor(Color.rgb(255, 80, 90)); setLiveButton(false)
+      status.setTextColor(Color.rgb(255, 80, 90)); diagnostics.text = "RTMP ERROR: " + reason; setLiveButton(false)
       Toast.makeText(this, reason, Toast.LENGTH_LONG).show()
     }
   }
   override fun onNewBitrate(bitrate: Long) { runOnUiThread { status.text = "● LIVE — CONNECTED  " + (bitrate / 1000) + " kbps"; status.setTextColor(Color.rgb(25, 198, 111)) } }
-  override fun onDisconnect() { streaming = false; runOnUiThread { status.text = "● READY"; status.setTextColor(Color.rgb(102, 221, 136)); setLiveButton(false) } }
-  override fun onAuthError() { streaming = false; runOnUiThread { status.text = "● FACEBOOK AUTH ERROR"; status.setTextColor(Color.rgb(255, 80, 90)); setLiveButton(false) } }
+  override fun onDisconnect() { streaming = false; runOnUiThread { status.text = "● READY"; status.setTextColor(Color.rgb(102, 221, 136)); diagnostics.text = "RTMP connection closed"; setLiveButton(false) } }
+  override fun onAuthError() { streaming = false; runOnUiThread { status.text = "● FACEBOOK AUTH ERROR"; status.setTextColor(Color.rgb(255, 80, 90)); diagnostics.text = "Facebook rejected the stream credentials"; setLiveButton(false) } }
   override fun onAuthSuccess() {}
   override fun onDestroy() {
     if (::stream.isInitialized) {

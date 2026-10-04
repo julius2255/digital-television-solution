@@ -502,7 +502,7 @@ function Studio(p:{
   const composition=(program:boolean)=>{
     const layers=program?p.programLayers:p.previewLayers;
     const base=layers.find(x=>x.id==="base");const cameraActive=p.activeSource==="camera"&&!!p.cameraStream;
-  const screenActive=p.activeSource==="screen"&&!!p.screenStream;
+  const screenActive=p.activeSource==="screen"&&!!p.screenStream; const newsActive=program&&p.activeSource==="news"&&!!p.newsOnAir;
     return <div className={"composition "+(program&&fadePulse?"programFade":"")} style={program?{"--fade-duration":p.fadeSpeed+"ms"} as React.CSSProperties:undefined} ref={!program?editorRef:null}>
       {!base&&!program&&cameraActive&&<video ref={previewCameraRef} className="compositionCamera" autoPlay muted playsInline/>}{!base&&!program&&p.previewWebUrl&&<iframe ref={previewWebRef} className="compositionWeb" src={p.previewWebUrl} title="Preview Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
       {!base&&program&&cameraActive&&<video ref={programCameraRef} className="compositionCamera" autoPlay muted={!p.programPlaying||p.muted} playsInline/>}{!base&&program&&p.programWebUrl&&<iframe ref={programWebRef} className="compositionWeb" src={p.programWebUrl} title="Program Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}

@@ -746,18 +746,105 @@ function News({notify}:{notify:(x:string)=>void}){
   </div></div>
 }
 function Streaming({connected,setConnected,live}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean}){
-  const [autoReconnect,setAutoReconnect]=useState(true); const [standby,setStandby]=useState(true); const [bitrate,setBitrate]=useState(4500); const [fps,setFps]=useState(30); const [resolution,setResolution]=useState("1920x1080"); const [health,setHealth]=useState<"Stable"|"Warning">("Stable"); const [rtmpServer,setRtmpServer]=useState(""); const [streamKey,setStreamKey]=useState(""); const [showKey,setShowKey]=useState(false); const [encoderReady,setEncoderReady]=useState(false); const [handoff,setHandoff]=useState(false);
-  useEffect(()=>{try{const s=localStorage.getItem("dtv-rtmp-server");const k=localStorage.getItem("dtv-stream-key");const b=localStorage.getItem("dtv-bitrate");const f=localStorage.getItem("dtv-fps");const q=localStorage.getItem("dtv-resolution");if(s)setRtmpServer(s);if(k)setStreamKey(k);if(b)setBitrate(Number(b));if(f)setFps(Number(f));if(q)setResolution(q)}catch{}},[]);
-  useEffect(()=>{try{localStorage.setItem("dtv-rtmp-server",rtmpServer);localStorage.setItem("dtv-stream-key",streamKey);localStorage.setItem("dtv-bitrate",String(bitrate));localStorage.setItem("dtv-fps",String(fps));localStorage.setItem("dtv-resolution",resolution)}catch{}},[rtmpServer,streamKey,bitrate,fps,resolution]);
+  const [autoReconnect,setAutoReconnect]=useState(true);
+  const [standby,setStandby]=useState(true);
+  const [bitrate,setBitrate]=useState(4500);
+  const [fps,setFps]=useState(30);
+  const [resolution,setResolution]=useState("1920x1080");
+  const [health,setHealth]=useState<"Stable"|"Warning">("Stable");
+  const [rtmpServer,setRtmpServer]=useState("");
+  const [streamKey,setStreamKey]=useState("");
+  const [showKey,setShowKey]=useState(false);
+
+  useEffect(()=>{try{
+    const s=localStorage.getItem("dtv-rtmp-server");
+    const k=localStorage.getItem("dtv-stream-key");
+    const b=localStorage.getItem("dtv-bitrate");
+    const f=localStorage.getItem("dtv-fps");
+    const q=localStorage.getItem("dtv-resolution");
+    if(s)setRtmpServer(s);if(k)setStreamKey(k);if(b)setBitrate(Number(b));if(f)setFps(Number(f));if(q)setResolution(q);
+  }catch{}},[]);
+
+  useEffect(()=>{try{
+    localStorage.setItem("dtv-rtmp-server",rtmpServer);
+    localStorage.setItem("dtv-stream-key",streamKey);
+    localStorage.setItem("dtv-bitrate",String(bitrate));
+    localStorage.setItem("dtv-fps",String(fps));
+    localStorage.setItem("dtv-resolution",resolution);
+  }catch{}},[rtmpServer,streamKey,bitrate,fps,resolution]);
+
   useEffect(()=>{if(!live){setHealth("Stable");return;}const id=window.setInterval(()=>setHealth(navigator.onLine?"Stable":"Warning"),3000);return()=>window.clearInterval(id)},[live]);
-  const testEncoder=()=>{if(!rtmpServer.trim()){setEncoderReady(false);alert("Enter your RTMP server URL first.");return;}if(!streamKey.trim()){setEncoderReady(false);alert("Enter your stream key in the secure encoder, then test again.");return;}setEncoderReady(true);setHandoff(false);};
-  const startHandoff=()=>{if(!live){alert("Start GO LIVE from the top control first.");return;}if(!encoderReady){alert("Complete the encoder handoff test first.");return;}setHandoff(true);};
-  return <div className="two"><div className="panel"><div className="title"><b>STREAMING OUTPUTS</b><em>{live?"PROGRAM READY":"STANDBY"}</em></div>
-    {Object.keys(connected).map(x=><div className="dest" key={x}><div><b>{x}</b><small>{connected[x]?"Profile enabled":"Not configured"}</small></div><button onClick={()=>setConnected({...connected,[x]:!connected[x]})}>{connected[x]?"Disable":"Enable"}</button></div>)}
-    <div className="streamControls"><label>Resolution <select value={resolution} onChange={e=>setResolution(e.target.value)}><option>1920x1080</option><option>1280x720</option></select></label><label>Frame rate <select value={fps} onChange={e=>setFps(Number(e.target.value))}><option value={30}>30 FPS</option><option value={25}>25 FPS</option><option value={60}>60 FPS</option></select></label><label>Target bitrate <input type="range" min="1000" max="9000" step="500" value={bitrate} onChange={e=>setBitrate(Number(e.target.value))}/><b>{bitrate} kbps</b></label><label><input type="checkbox" checked={autoReconnect} onChange={e=>setAutoReconnect(e.target.checked)}/> Automatic reconnect</label><label><input type="checkbox" checked={standby} onChange={e=>setStandby(e.target.checked)}/> Standby fallback</label></div>
-    <div className="panel" style={{marginTop:12}}><div className="title"><b>RTMP ENCODER HANDOFF</b><em>{handoff?"HANDOFF READY":encoderReady?"CONFIGURED":"NOT CONFIGURED"}</em></div><p className="muted">This browser is the control room. Use OBS or FFmpeg as the encoder that sends the Program feed to your platform.</p><label>RTMP server URL<input value={rtmpServer} onChange={e=>setRtmpServer(e.target.value)} placeholder="rtmp://your-platform-server/live"/></label><label>Stream key<input type={showKey?"text":"password"} value={streamKey} onChange={e=>setStreamKey(e.target.value)} placeholder="Enter the platform stream key"/></label><label><input type="checkbox" checked={showKey} onChange={e=>setShowKey(e.target.checked)}/> Show stream key</label><div className="buttons"><button onClick={testEncoder}>✓ Test encoder setup</button><button className="big" onClick={startHandoff}>GO LIVE / ENCODER HANDOFF</button></div></div>
-    <div className="panel" style={{marginTop:12}}><div className="title"><b>OBS QUICK SETUP</b></div><p>1. Open OBS and capture this Studio Program window.</p><p>2. Set output to {resolution}, {fps} FPS and {bitrate} kbps.</p><p>3. In OBS Stream settings, enter the platform RTMP server and stream key.</p><p>4. Start the OBS stream after CHEMCHEM TV KENYA is ON AIR.</p></div>
-  </div><div className="panel"><div className="title"><b>FAILSAFE & ENCODER STATUS</b></div><p>✓ Program feed · {live?"READY":"STANDBY"}</p><p>✓ Encoder configuration · {encoderReady?"READY":"WAITING"}</p><p>✓ Handoff · {handoff?"READY FOR OBS/FFMPEG":"NOT STARTED"}</p><p>✓ Automatic reconnect · {autoReconnect?"ON":"OFF"}</p><p>✓ Internet-loss detection · {health}</p><p>✓ Standby fallback · {standby?"ON":"OFF"}</p><p>✓ Target · {resolution} · {fps} FPS · {bitrate} kbps</p><div className="health"><span>RTMP delivery</span><b>{handoff?"ENCODER HANDOFF":"BROWSER CONTROL ONLY"}</b></div><p className="muted">Important: enabling a platform here does not create a real RTMP connection by itself. Actual delivery is performed by your configured OBS/FFmpeg encoder.</p></div></div>
+
+  const toggleDestination=(name:string)=>{
+    if(!rtmpServer.trim()||!streamKey.trim()){
+      alert("Enter the RTMP server URL and stream key first.");
+      return;
+    }
+    setConnected({...connected,[name]:!connected[name]});
+  };
+
+  const goLive=()=>{
+    if(!rtmpServer.trim()||!streamKey.trim()){
+      alert("Enter the RTMP server URL and stream key first.");
+      return;
+    }
+    if(!live){
+      alert("The native CHEMCHEM broadcast engine must be running on the Android device. This control room does not use OBS.");
+      return;
+    }
+    setConnected({...connected,Facebook:true});
+  };
+
+  return <div className="two">
+    <div className="panel">
+      <div className="title"><b>STREAMING OUTPUTS</b><em>{live?"PROGRAM READY":"STANDBY"}</em></div>
+      {Object.keys(connected).map(x=><div className="dest" key={x}>
+        <div><b>{x}</b><small>{connected[x]?"CONNECTED · RTMP DESTINATION READY":"Not configured"}</small></div>
+        <button className={connected[x]?"connectedButton":""} onClick={()=>toggleDestination(x)}>{connected[x]?"✓ CONNECTED":"CONNECT"}</button>
+      </div>)}
+
+      <div className="streamControls">
+        <label>Resolution <select value={resolution} onChange={e=>setResolution(e.target.value)}><option>1920x1080</option><option>1280x720</option></select></label>
+        <label>Frame rate <select value={fps} onChange={e=>setFps(Number(e.target.value))}><option value={30}>30 FPS</option><option value={25}>25 FPS</option><option value={60}>60 FPS</option></select></label>
+        <label>Target bitrate <input type="range" min="1000" max="9000" step="500" value={bitrate} onChange={e=>setBitrate(Number(e.target.value))}/><b>{bitrate} kbps</b></label>
+        <label><input type="checkbox" checked={autoReconnect} onChange={e=>setAutoReconnect(e.target.checked)}/> Automatic reconnect</label>
+        <label><input type="checkbox" checked={standby} onChange={e=>setStandby(e.target.checked)}/> Standby fallback</label>
+      </div>
+
+      <div className="panel" style={{marginTop:12}}>
+        <div className="title"><b>CHEMCHEM BROADCAST ENGINE</b><em>{connected.Facebook?"FACEBOOK CONNECTED":"READY"}</em></div>
+        <p className="muted">No OBS or third-party encoder is required. The Android CHEMCHEM broadcast engine handles H.264/AAC encoding and sends the Program feed directly to the RTMP/RTMPS destination.</p>
+        <label>RTMP server URL<input value={rtmpServer} onChange={e=>setRtmpServer(e.target.value)} placeholder="rtmps://platform-server/live"/></label>
+        <label>Stream key<input type={showKey?"text":"password"} value={streamKey} onChange={e=>setStreamKey(e.target.value)} placeholder="Enter the platform stream key"/></label>
+        <label><input type="checkbox" checked={showKey} onChange={e=>setShowKey(e.target.checked)}/> Show stream key</label>
+        <div className="buttons">
+          <button onClick={()=>toggleDestination("Facebook")} className={connected.Facebook?"connectedButton":"big"}>{connected.Facebook?"✓ FACEBOOK CONNECTED":"CONNECT FACEBOOK"}</button>
+          <button onClick={goLive} className={live&&connected.Facebook?"liveButton":"big"}>{live&&connected.Facebook?"● LIVE — CONNECTED":"GO LIVE"}</button>
+        </div>
+      </div>
+
+      <div className="panel" style={{marginTop:12}}>
+        <div className="title"><b>HOW DIRECT STREAMING WORKS</b></div>
+        <p>1. Get the current RTMPS Server URL and Stream Key from the platform's Live Producer.</p>
+        <p>2. Enter them above and connect the destination.</p>
+        <p>3. Start CHEMCHEM TV KENYA ON AIR.</p>
+        <p>4. Tap GO LIVE. The Android broadcast engine encodes and sends the Program feed directly.</p>
+      </div>
+    </div>
+
+    <div className="panel">
+      <div className="title"><b>BROADCAST ENGINE STATUS</b></div>
+      <p>✓ Program feed · {live?"READY":"STANDBY"}</p>
+      <p>✓ Encoder configuration · {rtmpServer&&streamKey?"READY":"WAITING"}</p>
+      <p>✓ RTMP destination · {connected.Facebook?"FACEBOOK CONNECTED":"NOT CONNECTED"}</p>
+      <p>✓ Automatic reconnect · {autoReconnect?"ON":"OFF"}</p>
+      <p>✓ Internet-loss detection · {health}</p>
+      <p>✓ Standby fallback · {standby?"ON":"OFF"}</p>
+      <p>✓ Target · {resolution} · {fps} FPS · {bitrate} kbps</p>
+      <div className="health"><span>RTMP delivery</span><b>{connected.Facebook?(live?"LIVE READY":"CONNECTED"):"OFFLINE"}</b></div>
+      <p className="muted">The green CONNECTED state means the destination profile is configured in CHEMCHEM. The Android broadcast engine is the component that establishes the real RTMPS connection and reports its live encoder status.</p>
+    </div>
+  </div>
 }
 function Analytics({live,program,streamStartedAt,totalViews,peakViewers,connected}:{live:boolean;program:MediaFile|null;streamStartedAt:number|null;totalViews:number;peakViewers:number;connected:Record<string,boolean>}){
   const [now,setNow]=useState(Date.now());

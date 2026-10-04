@@ -106,10 +106,11 @@ export default function Home(){
   };
 
   useEffect(()=>{
-    if(!autoSchedule||!scheduleClock)return;
-    const row=schedule.find(r=>r[0]===scheduleClock);
-    if(!row||lastAutoSlotRef.current===scheduleClock)return;
-    lastAutoSlotRef.current=scheduleClock;
+    if(!autoSchedule||!scheduleClock||!schedule.length)return;
+    const ordered=[...schedule].filter(r=>/^\\d{2}:\\d{2}$/.test(r[0]||"")).sort((a,b)=>a[0].localeCompare(b[0]));
+    const row=[...ordered].reverse().find(r=>r[0]<=scheduleClock)||ordered[ordered.length-1];
+    if(!row||lastAutoSlotRef.current===row[0])return;
+    lastAutoSlotRef.current=row[0];
     if(!row[3]&&row[2]==="Camera"){
       if(cameraStreamRef.current){
         setPreviewMediaId("");

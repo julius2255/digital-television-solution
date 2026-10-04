@@ -493,7 +493,7 @@ function News({notify}:{notify:(x:string)=>void}){
   const [category,setCategory]=useState("Kenya"); const [source,setSource]=useState("TUKO NEWS");
   const [autoVoice,setAutoVoice]=useState(true); const [ticker,setTicker]=useState(true); const [refresh,setRefresh]=useState(5);
   const [items,setItems]=useState<{title:string;description:string;link:string;published:string}[]>([]);
-  const [loading,setLoading]=useState(false); const [selected,setSelected]=useState(0); const [speaking,setSpeaking]=useState(false); const [voiceName,setVoiceName]=useState(""); const [voiceOptions,setVoiceOptions]=useState<SpeechSynthesisVoice[]>([]);
+  const [loading,setLoading]=useState(false); const [selected,setSelected]=useState(0); const [speaking,setSpeaking]=useState(false); const [voiceName,setVoiceName]=useState(""); const [voiceOptions,setVoiceOptions]=useState<SpeechSynthesisVoice[]>([]); const [voiceEngine,setVoiceEngine]=useState<"azure"|"browser">("azure"); const audioRef=useRef<HTMLAudioElement|null>(null);
   const stripMarkup=(value:string)=>{
     if(!value)return "";
     const box=document.createElement("div");
@@ -522,12 +522,36 @@ function News({notify}:{notify:(x:string)=>void}){
       ||voices.find(v=>/^en-US/i.test(v.lang))
       ||voices[0];
   };
-  const speakHeadline=(item:{title:string;description:string})=>{
+  const speakWithAzure=async(item:{title:string;description:string})=>{
+    const headline=normalizeNewsText(item.title);
+    const description=normalizeNewsText(item.description||"");
+    const text=("This is Digital Television Solution News. "+headline+(description?" . "+description:"")).replace(/\\s+/g," ").trim();
+    try{
+      setSpeaking(true);
+      const r=await fetch("/api/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,voice:voiceName||"en-GB-RyanNeural"})});
+      if(!r.ok)throw new Error("TTS unavailable");
+      const blob=await r.blob();
+      if(audioRef.current){audioRef.current.pause();audioRef.current.src="";URL.revokeObjectURL(audioRef.current.dataset.objectUrl||"");}
+      const url=URL.createObjectURL(blob);
+      const audio=new Audio(url);
+      audioRef.current=audio;
+      audio.dataset.objectUrl=url;
+      audio.onended=()=>{setSpeaking(false);URL.revokeObjectURL(url)};
+      audio.onerror=()=>{setSpeaking(false);URL.revokeObjectURL(url);notify("Azure voice playback failed")};
+      await audio.play();
+      notify("AI NEWS ANCHOR: Azure Neural Voice");
+    }catch{
+      setSpeaking(false);
+      notify("Azure voice is not configured. Using browser English voice.");
+      speakWithBrowser(item);
+    }
+  };
+  const speakWithBrowser=(item:{title:string;description:string})=>{
     if(typeof window==="undefined"||!("speechSynthesis" in window)){notify("Voice is not supported by this browser");return;}
     window.speechSynthesis.cancel();
     const headline=normalizeNewsText(item.title);
     const description=normalizeNewsText(item.description||"");
-    const text=("This is Digital Television Solution News. "+headline+(description?" . "+description:"")).replace(/\s+/g," ").trim();
+    const text=("This is Digital Television Solution News. "+headline+(description?" . "+description:"")).replace(/\\s+/g," ").trim();
     const voice=chooseAnchorVoice();
     const chunks=text.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map(x=>x.trim()).filter(Boolean)||[text];
     let index=0;
@@ -537,17 +561,17 @@ function News({notify}:{notify:(x:string)=>void}){
       const utterance=new SpeechSynthesisUtterance(chunks[index++]);
       if(voice)utterance.voice=voice;
       utterance.lang=voice?.lang||"en-GB";
-      utterance.rate=.78;
-      utterance.pitch=.96;
-      utterance.volume=1;
-      utterance.onend=speakNext;
-      utterance.onerror=()=>setSpeaking(false);
+      utterance.rate=.78; utterance.pitch=.96; utterance.volume=1;
+      utterance.onend=speakNext; utterance.onerror=()=>setSpeaking(false);
       window.speechSynthesis.speak(utterance);
     };
     speakNext();
     notify("NEWS ANCHOR: "+(voice?.name||"clear English voice"));
   };
-  const stopVoice=()=>{if(typeof window!=="undefined"&&"speechSynthesis" in window)window.speechSynthesis.cancel();setSpeaking(false)};
+  const speakHeadline=(item:{title:string;description:string})=>{
+    if(voiceEngine==="azure")speakWithAzure(item); else speakWithBrowser(item);
+  };
+  const stopVoice=()=>{if(typeof window!=="undefined"&&"speechSynthesis" in window)window.speechSynthesis.cancel();if(audioRef.current){audioRef.current.pause();audioRef.current.currentTime=0;audioRef.current.src="";}setSpeaking(false)};
   useEffect(()=>{if(typeof window==="undefined"||!("speechSynthesis" in window))return;const load=()=>setVoiceOptions(getEnglishVoices());load();window.speechSynthesis.addEventListener("voiceschanged",load);return()=>window.speechSynthesis.removeEventListener("voiceschanged",load)},[]);
   useEffect(()=>{
     const load=async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category),{cache:"no-store"});const j=await r.json();setItems(j.items||[])}catch{notify("News feed connection failed")}finally{setLoading(false)}};
@@ -563,7 +587,7 @@ function News({notify}:{notify:(x:string)=>void}){
       <div className="ticker">{ticker?"KENYA • AFRICA • WORLD • SPORTS • BUSINESS • ENTERTAINMENT":"Ticker disabled"}</div>
       <div className="newsControls"><select value={category} onChange={e=>setCategory(e.target.value)}>{["Kenya","Africa","World","Sports","Business","Entertainment","Weather"].map(x=><option key={x}>{x}</option>)}</select>
       <select value={source} onChange={e=>setSource(e.target.value)}>{["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD"].map(x=><option key={x}>{x}</option>)}</select>
-      <label><input type="checkbox" checked={autoVoice} onChange={e=>setAutoVoice(e.target.checked)}/> AUTO VOICE</label><label><input type="checkbox" checked={ticker} onChange={e=>setTicker(e.target.checked)}/> TICKER</label><span>Refresh {refresh} min</span><select value={voiceName} onChange={e=>setVoiceName(e.target.value)}><option value="">Best English voice</option>{voiceOptions.map(v=><option key={v.name+"-"+v.lang} value={v.name}>{v.name} ({v.lang})</option>)}</select></div>
+      <label><input type="checkbox" checked={autoVoice} onChange={e=>setAutoVoice(e.target.checked)}/> AUTO VOICE</label><label><input type="checkbox" checked={ticker} onChange={e=>setTicker(e.target.checked)}/> TICKER</label><span>Refresh {refresh} min</span><select value={voiceEngine} onChange={e=>setVoiceEngine(e.target.value as "azure"|"browser")}><option value="azure">Azure Neural AI</option><option value="browser">Browser Voice (fallback)</option></select><select value={voiceName} onChange={e=>setVoiceName(e.target.value)}><option value="">Professional UK voice</option>{voiceEngine==="browser"&&voiceOptions.map(v=><option key={v.name+"-"+v.lang} value={v.name}>{v.name} ({v.lang})</option>)}</select></div>
     </div>
     <div className="buttons">
       <button onClick={()=>{if(!items.length){notify("No headline available");return}const next=(selected+1)%items.length;setSelected(next);if(autoVoice)speakHeadline(items[next])}}>▶ Next + Read</button>
@@ -573,7 +597,7 @@ function News({notify}:{notify:(x:string)=>void}){
     </div>
   </div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>
     {["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD"].map(s=><div className="health" key={s}><span>{s}</span><b>{source===s?"ACTIVE":"Ready"}</b></div>)}
-    <div className="panel" style={{marginTop:12}}><div className="title"><b>NEWS ANCHOR VOICE</b><em>{speaking?"ON AIR":"READY"}</em></div><p className="muted">Clear English newsroom delivery. The system filters out non-English browser voices, cleans RSS markup, normalizes headlines, removes noisy web text, and speaks sentence-by-sentence for cleaner pacing.</p><div className="health"><span>VOICE ENGINE</span><b>{voiceOptions.length?"English voices ready":"Waiting for browser voices"}</b></div></div>
+    <div className="panel" style={{marginTop:12}}><div className="title"><b>NEWS ANCHOR VOICE</b><em>{speaking?"ON AIR":"READY"}</em></div><p className="muted">Professional AI newsroom delivery. Azure Neural is the primary engine for natural broadcast speech; browser English voice remains available as a fallback. Headlines are cleaned and normalized before narration.</p><div className="health"><span>VOICE ENGINE</span><b>{voiceEngine==="azure"?"Azure Neural AI":"English browser voices"}</b></div></div>
   </div></div>
 }
 function Streaming({connected,setConnected,live}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean}){

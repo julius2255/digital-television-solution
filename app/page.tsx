@@ -3,6 +3,7 @@
 import {useEffect,useRef,useState} from "react";
 type Section="studio"|"playlist"|"schedule"|"news"|"media"|"streaming"|"analytics"|"settings";
 type MediaFile={id:string;name:string;type:string;url:string;size:number};
+type NewsOnAir={title:string;description:string;image?:string;source?:string;category?:string;published?:string;link?:string};
 type Scene={id:string;name:string};
 type Source={id:string;name:string;kind:string;mediaId?:string;url?:string;visible:boolean};
 type StudioLayer={id:string;name:string;kind:"video"|"image"|"text";mediaId?:string;text?:string;x:number;y:number;width:number;height:number;rotation:number;opacity:number;zoom:number;cropTop:number;cropRight:number;cropBottom:number;cropLeft:number;visible:boolean;locked:boolean;role?:"channel-logo"|"show-logo";};
@@ -89,6 +90,12 @@ export default function Home(){
   const [scheduleClock,setScheduleClock]=useState("");
   const lastAutoSlotRef=useRef("");
   const fileInputRef=useRef<HTMLInputElement>(null);
+  const [newsOnAir,setNewsOnAir]=useState<NewsOnAir|null>(null);
+  useEffect(()=>{
+    let cancelled=false;
+    const loadNews=async()=>{try{const r=await fetch("/api/news?category=Kenya&source=STANDARD%20KENYA",{cache:"no-store"});const j=await r.json();const item=j.items?.[0];if(!cancelled&&item)setNewsOnAir(item)}catch{}};
+    loadNews();const id=window.setInterval(loadNews,120000);return()=>{cancelled=true;window.clearInterval(id)};
+  },[]);
 
   useEffect(()=>{try{const s=localStorage.getItem("dtv-schedule");if(s)setSchedule(JSON.parse(s));const a=localStorage.getItem("dtv-auto-schedule");if(a!==null)setAutoSchedule(a==="true");const pl=localStorage.getItem("dtv-playlist");if(pl)setPlaylistIds(JSON.parse(pl));const fs=localStorage.getItem("dtv-fade-speed");if(fs)setFadeSpeed(Number(fs));const cl=localStorage.getItem("dtv-channel-logo");if(cl)setChannelLogoId(cl);const sl=localStorage.getItem("dtv-show-logos");if(sl)setShowLogoMap(JSON.parse(sl))}catch{}},[]);
   useEffect(()=>{try{localStorage.setItem("dtv-schedule",JSON.stringify(schedule));localStorage.setItem("dtv-auto-schedule",String(autoSchedule));localStorage.setItem("dtv-playlist",JSON.stringify(playlistIds));localStorage.setItem("dtv-fade-speed",String(fadeSpeed));localStorage.setItem("dtv-channel-logo",channelLogoId);localStorage.setItem("dtv-show-logos",JSON.stringify(showLogoMap))}catch{}},[schedule,autoSchedule,playlistIds,fadeSpeed,channelLogoId,showLogoMap]);
@@ -329,7 +336,7 @@ export default function Home(){
         onProgramEnded={()=>{const current=programMediaId;if(current&&playNextPlaylistItem(current))return;setProgramPlaying(false);setProgramTime(0);notify("Program item finished — waiting for the next scheduled item")}}
         scenes={scenes} activeScene={activeScene} setActiveScene={setActiveScene} addScene={addScene}
         sources={sources} activeSource={activeSource} setActiveSource={setActiveSource} addSource={addSource} addWebSource={addWebSource}
-        mediaFiles={mediaFiles} selectMedia={selectMedia} playMedia={playMedia} selectWeb={(url)=>{setPreviewMediaId("");setPreviewWebUrl(url);setPreviewPlaying(false);notify("Web page loaded into Preview")}} upload={()=>fileInputRef.current?.click()} cameraStream={cameraStreamRef.current} cameraReady={cameraReady} cameraFacing={cameraFacing} startCamera={startCamera} flipCamera={flipCamera} stopCamera={stopCamera} screenStream={screenStreamRef.current} screenReady={screenReady} startScreenShare={startScreenShare} stopScreenShare={stopScreenShare}
+        newsOnAir={newsOnAir} mediaFiles={mediaFiles} selectMedia={selectMedia} playMedia={playMedia} selectWeb={(url)=>{setPreviewMediaId("");setPreviewWebUrl(url);setPreviewPlaying(false);notify("Web page loaded into Preview")}} upload={()=>fileInputRef.current?.click()} cameraStream={cameraStreamRef.current} cameraReady={cameraReady} cameraFacing={cameraFacing} startCamera={startCamera} flipCamera={flipCamera} stopCamera={stopCamera} screenStream={screenStreamRef.current} screenReady={screenReady} startScreenShare={startScreenShare} stopScreenShare={stopScreenShare}
       />}
       {section==="playlist"&&<Playlist mediaFiles={mediaFiles} playlistIds={playlistIds} previewMediaId={previewMediaId} selectMedia={selectMedia} playMedia={playMedia} remove={removeMedia} move={movePlaylist} removeFromPlaylist={removeFromPlaylist} addToPlaylist={addToPlaylist} playNow={playPlaylistItem} upload={()=>fileInputRef.current?.click()}/>}
       {section==="schedule"&&<Schedule rows={schedule} now={scheduleClock} auto={autoSchedule} setAuto={setAutoSchedule} setRows={setSchedule} add={addProgramme} mediaFiles={mediaFiles} playNow={playScheduled} showLogoMap={showLogoMap} setShowLogoMap={setShowLogoMap} imageFiles={mediaFiles.filter(f=>f.type.startsWith("image/"))}/>} 
@@ -352,7 +359,7 @@ function Studio(p:{
   setVolume:(v:number)=>void;setMuted:(v:boolean)=>void;togglePreview:()=>void;stopPreview:()=>void;toggleProgram:()=>void;
   take:(mode?:"cut"|"fade",time?:number)=>void;transition:"cut"|"fade";setTransition:(v:"cut"|"fade")=>void;
   live:boolean;toggleLive:()=>void;onProgramEnded?:()=>void;scenes:Scene[];activeScene:string;setActiveScene:(v:string)=>void;addScene:()=>void;
-  sources:Source[];activeSource:string;setActiveSource:(v:string)=>void;addSource:()=>void;addWebSource:()=>void;
+  sources:Source[];activeSource:string;newsOnAir:NewsOnAir|null;setActiveSource:(v:string)=>void;addSource:()=>void;addWebSource:()=>void;
   mediaFiles:MediaFile[];selectMedia:(id:string)=>void;playMedia:(id:string)=>void;selectWeb:(url:string)=>void;upload:()=>void;cameraStream:MediaStream|null;cameraReady:boolean;cameraFacing:"user"|"environment";startCamera:()=>void;flipCamera:()=>void;stopCamera:()=>void;screenStream:MediaStream|null;screenReady:boolean;startScreenShare:()=>void;stopScreenShare:()=>void;
 }){
   const previewRef=useRef<HTMLVideoElement>(null);
@@ -498,6 +505,13 @@ function Studio(p:{
     return <div className={"composition "+(program&&fadePulse?"programFade":"")} style={program?{"--fade-duration":p.fadeSpeed+"ms"} as React.CSSProperties:undefined} ref={!program?editorRef:null}>
       {!base&&!program&&cameraActive&&<video ref={previewCameraRef} className="compositionCamera" autoPlay muted playsInline/>}{!base&&!program&&p.previewWebUrl&&<iframe ref={previewWebRef} className="compositionWeb" src={p.previewWebUrl} title="Preview Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
       {!base&&program&&cameraActive&&<video ref={programCameraRef} className="compositionCamera" autoPlay muted={!p.programPlaying||p.muted} playsInline/>}{!base&&program&&p.programWebUrl&&<iframe ref={programWebRef} className="compositionWeb" src={p.programWebUrl} title="Program Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
+      {newsActive&&<div className="compositionNews" style={{position:"absolute",inset:0,background:"#07111f",color:"#fff",overflow:"hidden",fontFamily:"Arial,sans-serif"}}>
+        {p.newsOnAir?.image&&<img src={p.newsOnAir.image} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:.42}}/>}
+        <div style={{position:"absolute",inset:0,background:"linear-gradient(90deg,rgba(3,12,25,.97) 0%,rgba(3,12,25,.82) 55%,rgba(3,12,25,.3) 100%)"}}/>
+        <div style={{position:"absolute",left:"4%",right:"4%",top:"6%",display:"flex",justifyContent:"space-between",alignItems:"flex-start",textTransform:"uppercase"}}><div><b style={{fontSize:"clamp(16px,2.2vw,34px)",letterSpacing:1}}>CHEMCHEM <i style={{fontStyle:"normal",color:"#d8b4ff"}}>TV KENYA</i></b><div style={{fontSize:"clamp(9px,1vw,16px)",opacity:.75,marginTop:4}}>LIVE NEWSROOM • TRUTH • ACCURACY • FOR YOU</div></div><span style={{background:"#d71920",padding:"7px 12px",borderRadius:4,fontWeight:800,fontSize:"clamp(10px,1vw,16px)"}}>● LIVE NEWS</span></div>
+        <div style={{position:"absolute",left:"4%",right:"7%",top:"29%"}}><div style={{fontSize:"clamp(10px,1.1vw,18px)",fontWeight:800,color:"#d8b4ff",letterSpacing:1.5,marginBottom:10}}>{(p.newsOnAir?.category||"KENYA").toUpperCase()} • {p.newsOnAir?.source||"NEWSROOM"}</div><h2 style={{fontSize:"clamp(25px,4vw,64px)",lineHeight:1.04,margin:"0 0 18px",maxWidth:"90%",textShadow:"0 2px 8px #000"}}>{p.newsOnAir?.title}</h2><p style={{fontSize:"clamp(12px,1.45vw,23px)",lineHeight:1.35,maxWidth:"72%",margin:0,color:"rgba(255,255,255,.88)"}}>{p.newsOnAir?.description}</p></div>
+        <div style={{position:"absolute",left:0,right:0,bottom:0,background:"rgba(215,25,32,.96)",padding:"10px 4%",fontSize:"clamp(10px,1.1vw,17px)",fontWeight:800,letterSpacing:.4}}>BREAKING / LIVE • {p.newsOnAir?.title}</div>
+      </div>}
       {layers.map(l=>renderLayer(l,program))}
       {!base&&!p.previewWebUrl&&!cameraActive&&!program&&<span className="screenEmpty">BUILD YOUR PREVIEW</span>}
       {!base&&!p.programWebUrl&&!cameraActive&&program&&<span className="screenEmpty">PROGRAM STANDBY</span>}

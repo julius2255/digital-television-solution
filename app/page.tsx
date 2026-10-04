@@ -343,7 +343,7 @@ export default function Home(){
       {section==="schedule"&&<Schedule rows={schedule} now={scheduleClock} auto={autoSchedule} setAuto={setAutoSchedule} setRows={setSchedule} add={addProgramme} mediaFiles={mediaFiles} playNow={playScheduled} showLogoMap={showLogoMap} setShowLogoMap={setShowLogoMap} imageFiles={mediaFiles.filter(f=>f.type.startsWith("image/"))}/>} 
       {section==="news"&&<News notify={notify}/>}
       {section==="media"&&<Media files={mediaFiles} selected={previewMediaId} select={selectMedia} remove={removeMedia} upload={()=>fileInputRef.current?.click()}/>}
-      {section==="streaming"&&<Streaming connected={connected} setConnected={setConnected} live={live}/>}
+      {section==="streaming"&&<Streaming connected={connected} setConnected={setConnected} live={live} program={programMedia} preview={previewMedia} programWebUrl={programWebUrl}/ >}
       {section==="analytics"&&<Analytics live={live} program={programMedia} streamStartedAt={streamStartedAt} totalViews={totalViews} peakViewers={peakViewers} connected={connected}/>}
       {section==="settings"&&<Settings notify={notify}/>}
     </section>
@@ -745,7 +745,7 @@ function News({notify}:{notify:(x:string)=>void}){
     <div className="panel" style={{marginTop:12}}><div className="title"><b>NEWS ANCHOR VOICE</b><em>{speaking?"ON AIR":"READY"}</em></div><p className="muted">Professional AI newsroom delivery. Free Kokoro Neural speech runs in the browser using WebGPU with WASM fallback. No paid API or account is required. The first use downloads the neural model and voice assets, then the browser caches them.</p><div className="health"><span>VOICE ENGINE</span><b>{voiceEngine==="kokoro"?"Kokoro Neural AI (free/local)":"English browser voices"}</b></div></div>
   </div></div>
 }
-function Streaming({connected,setConnected,live}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean}){
+function Streaming({connected,setConnected,live,program,preview,programWebUrl}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean;program:MediaFile|null;preview:MediaFile|null;programWebUrl:string}){
   const [autoReconnect,setAutoReconnect]=useState(true);
   const [standby,setStandby]=useState(true);
   const [bitrate,setBitrate]=useState(4500);
@@ -782,12 +782,24 @@ function Streaming({connected,setConnected,live}:{connected:Record<string,boolea
     setConnected({...connected,Facebook:true});
     setMessage("Facebook RTMPS destination is configured. The Android engine must now connect to the exact server URL and key.");
   };
-  const goLive=()=>{
+  const openAndroidEncoder=()=>{
     setError("");setMessage("");
     if(!live){setError("Start CHEMCHEM TV KENYA ON AIR first.");return;}
-    if(!connected.Facebook){setError("Configure the Facebook RTMP destination first.");return;}
-    setMessage("Destination is armed. The Android engine is responsible for the real connection and Facebook preview.");
+    if(!connected.Facebook||!rtmpServer.trim()||!streamKey.trim()){setError("Configure Facebook RTMPS with the current Server URL and Stream Key first.");return;}
+    const params=new URLSearchParams({
+      server:rtmpServer.trim(),
+      key:streamKey.trim(),
+      program:program?.name||"Standby",
+      source:programWebUrl?"Web/YouTube":program?"Media":"Standby",
+      webUrl:programWebUrl||"",
+      preview:preview?.name||""
+    });
+    const deepLink="chemchemtv://encoder?"+params.toString();
+    setMessage("Opening the CHEMCHEM Android encoder with the current Facebook destination and Program feed.");
+    window.location.href=deepLink;
+    window.setTimeout(()=>setMessage("If Android did not open, install/update the CHEMCHEM TV KENYA Android app on this same phone and tap OPEN ANDROID ENCODER again."),1200);
   };
+  const goLive=()=>openAndroidEncoder();
   const clearDestination=()=>{
     setRtmpServer("");setStreamKey("");setConnected({...connected,Facebook:false});setMessage("Facebook RTMP destination cleared.");setError("");
   };
@@ -819,14 +831,19 @@ function Streaming({connected,setConnected,live}:{connected:Record<string,boolea
 
       <div className="panel" style={{marginTop:12}}>
         <div className="title"><b>CHEMCHEM BROADCAST ENGINE</b><em>{connected.Facebook?(live?"DESTINATION READY":"CONNECTED"):"READY"}</em></div>
-        <p className="muted">This browser control room prepares the destination. The actual program encoding and RTMPS connection happen in the CHEMCHEM Android encoder. Entering a URL and key alone never means LIVE.</p>
-        <div className="buttons"><button onClick={goLive} className="big">OPEN ANDROID ENCODER</button></div>
+        <p className="muted">OPEN ANDROID ENCODER now sends the real Facebook Server URL, Stream Key and current Program information to the installed CHEMCHEM TV KENYA Android encoder. The Android encoder is the component that creates H.264/AAC and sends RTMPS.</p>
+        <div className="health"><span>PREVIEW</span><b>{preview?.name||"STANDBY"}</b></div>
+        <div className="health"><span>PROGRAM TO STREAM</span><b>{programWebUrl?"WEB / YOUTUBE":program?.name||"STANDBY"}</b></div>
+        <div className="health"><span>FACEBOOK DESTINATION</span><b>{connected.Facebook?"READY FOR ANDROID":"NOT CONFIGURED"}</b></div>
+        <div className="buttons"><button onClick={openAndroidEncoder} className="big">OPEN ANDROID ENCODER</button></div>
+        <p className="muted">For the Android handoff to work, this control room must be opened on the same Android phone that has the CHEMCHEM TV KENYA encoder installed. Desktop browsers cannot launch an app on a different phone.</p>
       </div>
     </div>
 
     <div className="panel">
       <div className="title"><b>RTMP ENGINE STATUS</b></div>
-      <p>✓ Program feed · {live?"READY":"STANDBY"}</p>
+      <p>✓ Preview feed · {preview?.name||"STANDBY"}</p>
+      <p>✓ Program feed · {programWebUrl?"WEB / YOUTUBE":program?.name||"STANDBY"}</p>
       <p>✓ Facebook RTMPS · {connected.Facebook?"CONFIGURED":"NOT CONFIGURED"}</p>
       <p>✓ Encoder configuration · {rtmpServer&&streamKey?"READY":"WAITING"}</p>
       <p>✓ Automatic reconnect · {autoReconnect?"ON":"OFF"}</p>

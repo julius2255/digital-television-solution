@@ -27,19 +27,16 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private lateinit var diagnostics: TextView
   private var streaming = false
   private var encodersReady = false
+  private lateinit var previewView: OpenGlView
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    if (!hasPermissions()) {
-      ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO), 10)
-    }
-
     val root = LinearLayout(this).apply {
       orientation = LinearLayout.VERTICAL
       setBackgroundColor(0xFF07111F.toInt())
     }
-    val preview = OpenGlView(this)
-    root.addView(preview, LinearLayout.LayoutParams(-1, 0, 1f))
+    previewView = OpenGlView(this)
+    root.addView(previewView, LinearLayout.LayoutParams(-1, 0, 1f))
 
     val controls = LinearLayout(this).apply {
       orientation = LinearLayout.VERTICAL
@@ -82,12 +79,45 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     root.addView(controls, LinearLayout.LayoutParams(-1, -2))
     setContentView(root)
 
+    if (hasPermissions()) {
+      initializeStreamingEngine()
+    } else {
+      goButton.isEnabled = false
+      status.text = "● CAMERA/MIC PERMISSION REQUIRED"
+      status.setTextColor(Color.rgb(255, 193, 7))
+      diagnostics.text = "Grant camera and microphone permissions to initialize the encoder"
+      ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO), 10)
+    }
+  }
+
+  private fun initializeStreamingEngine() {
+    if (::stream.isInitialized) return
     stream = RtmpStream(this, this)
-    val videoPrepared = try { stream.prepareVideo(1920, 1080, 4500 * 1000, 30) } catch (e: Exception) { Log.e("CHEMCHEM_RTMP", "Video preparation failed", e); false }
-    val audioPrepared = try { stream.prepareAudio(44100, true, 128 * 1000) } catch (e: Exception) { Log.e("CHEMCHEM_RTMP", "Audio preparation failed", e); false }
+    val videoPrepared = try {
+      stream.prepareVideo(1920, 1080, 4500 * 1000, 30)
+    } catch (e: Exception) {
+      Log.e("CHEMCHEM_RTMP", "Video preparation failed", e)
+      false
+    }
+    val audioPrepared = try {
+      stream.prepareAudio(44100, true, 128 * 1000)
+    } catch (e: Exception) {
+      Log.e("CHEMCHEM_RTMP", "Audio preparation failed", e)
+      false
+    }
     encodersReady = videoPrepared && audioPrepared
-    diagnostics.text = if (encodersReady) "Engine diagnostics: H.264 1080p30 + AAC 44.1kHz ready" else "Engine diagnostics: encoder preparation failed — check MediaCodec support"
-    stream.startPreview(preview)
+    if (encodersReady) {
+      diagnostics.text = "Engine diagnostics: H.264 1080p30 + AAC 44.1kHz ready"
+      stream.startPreview(previewView)
+      goButton.isEnabled = true
+      status.text = "● READY — CAMERA/AUDIO ENGINE INITIALIZED"
+      status.setTextColor(Color.rgb(102, 221, 136))
+    } else {
+      diagnostics.text = "Engine diagnostics: encoder preparation failed — check MediaCodec support"
+      status.text = "● ENCODER ERROR"
+      status.setTextColor(Color.rgb(255, 80, 90))
+      goButton.isEnabled = false
+    }
   }
 
   private fun setLiveButton(live: Boolean) {
@@ -147,8 +177,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       diagnostics.text = "Grant camera and microphone permissions, then reopen CHEMCHEM TV KENYA"
       goButton.isEnabled = false
     } else if (requestCode == 10) {
-      goButton.isEnabled = true
-      diagnostics.text = "Permissions granted — encoder can be prepared"
+      if (hasPermissions()) {
+        initializeStreamingEngine()
+      } else {
+        goButton.isEnabled = false
+        diagnostics.text = "Camera and microphone permissions are required for Facebook streaming"
+      }
     }
   }
 

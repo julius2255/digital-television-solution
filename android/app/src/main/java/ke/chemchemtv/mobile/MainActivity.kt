@@ -139,6 +139,19 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     status.text = "● CONNECTING TO FACEBOOK..."
   }
 
+  override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    if (requestCode == 10 && !hasPermissions()) {
+      status.text = "● CAMERA/MIC PERMISSION REQUIRED"
+      status.setTextColor(Color.rgb(255, 80, 90))
+      diagnostics.text = "Grant camera and microphone permissions, then reopen CHEMCHEM TV KENYA"
+      goButton.isEnabled = false
+    } else if (requestCode == 10) {
+      goButton.isEnabled = true
+      diagnostics.text = "Permissions granted — encoder can be prepared"
+    }
+  }
+
   private fun hasInternet(): Boolean {
     val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
     val n = cm.activeNetwork ?: return false

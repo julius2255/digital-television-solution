@@ -2,6 +2,8 @@ package ke.chemchemtv.mobile
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.util.Log
 import android.text.InputType
@@ -24,6 +26,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private lateinit var goButton: Button
   private lateinit var diagnostics: TextView
   private var streaming = false
+  private var encodersReady = false
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -43,11 +46,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       setPadding(20, 14, 20, 14)
     }
     server = EditText(this).apply {
-      hint = "RTMPS ingest URL OR server URL"
+      hint = "Facebook Server URL"
+      setText(getPreferences(MODE_PRIVATE).getString("server", "rtmps://live-api-s.facebook.com:443/rtmp/"))
       setSingleLine(true)
     }
     key = EditText(this).apply {
-      hint = "Stream key (leave empty when using a complete Facebook ingest URL)"
+      hint = "Facebook Stream Key"
+      setText(getPreferences(MODE_PRIVATE).getString("key", ""))
       setSingleLine(true)
       inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
     }
@@ -80,7 +85,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     stream = RtmpStream(this, this)
     val videoPrepared = try { stream.prepareVideo(1920, 1080, 4500 * 1000, 30) } catch (e: Exception) { Log.e("CHEMCHEM_RTMP", "Video preparation failed", e); false }
     val audioPrepared = try { stream.prepareAudio(44100, true, 128 * 1000) } catch (e: Exception) { Log.e("CHEMCHEM_RTMP", "Audio preparation failed", e); false }
-    diagnostics.text = if (videoPrepared && audioPrepared) "Engine diagnostics: H.264 1080p30 + AAC 44.1kHz ready" else "Engine diagnostics: encoder preparation failed"
+    encodersReady = videoPrepared && audioPrepared
+    diagnostics.text = if (encodersReady) "Engine diagnostics: H.264 1080p30 + AAC 44.1kHz ready" else "Engine diagnostics: encoder preparation failed — check MediaCodec support"
     stream.startPreview(preview)
   }
 
@@ -100,6 +106,15 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
     val base = server.text.toString().trim()
     val streamKey = key.text.toString().trim()
+    if (!encodersReady) {
+      Toast.makeText(this, "Video/audio encoders are not ready", Toast.LENGTH_LONG).show()
+      return
+    }
+    if (!hasInternet()) {
+      Toast.makeText(this, "No validated internet connection", Toast.LENGTH_LONG).show()
+      diagnostics.text = "RTMP ERROR: no validated internet connection"
+      return
+    }
     if (base.isEmpty()) {
       Toast.makeText(this, "Enter an RTMPS/RTMP ingest URL or server URL", Toast.LENGTH_SHORT).show()
       return
@@ -107,8 +122,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     val endpoint = if (streamKey.isEmpty()) {
       base
     } else {
-      base.trimEnd('/') + "/" + streamKey
+      base.trimEnd('/') + "/" + streamKey.trimStart('/')
     }
+    if (streamKey.isEmpty() && base.contains("facebook.com", ignoreCase = true)) {
+      Toast.makeText(this, "Paste the Facebook Stream Key", Toast.LENGTH_LONG).show()
+      return
+    }
+    getPreferences(MODE_PRIVATE).edit().putString("server", base).putString("key", streamKey).apply()
     if (!endpoint.startsWith("rtmps://", ignoreCase = true) && !endpoint.startsWith("rtmp://", ignoreCase = true)) {
       Toast.makeText(this, "Use a valid rtmps:// or rtmp:// ingest endpoint", Toast.LENGTH_LONG).show()
       return
@@ -117,6 +137,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     stream.startStream(endpoint)
     setLiveButton(false)
     status.text = "● CONNECTING TO FACEBOOK..."
+  }
+
+  private fun hasInternet(): Boolean {
+    val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+    val n = cm.activeNetwork ?: return false
+    val caps = cm.getNetworkCapabilities(n) ?: return false
+    return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
   }
 
   private fun hasPermissions(): Boolean =

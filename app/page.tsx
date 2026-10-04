@@ -654,9 +654,9 @@ function News({notify}:{notify:(x:string)=>void}){
   const stopVoice=()=>{if(typeof window!=="undefined"&&"speechSynthesis" in window)window.speechSynthesis.cancel();if(audioRef.current){audioRef.current.pause();audioRef.current.currentTime=0;audioRef.current.src="";}setSpeaking(false)};
   useEffect(()=>{if(typeof window==="undefined"||!("speechSynthesis" in window))return;const load=()=>setVoiceOptions(getEnglishVoices());load();window.speechSynthesis.addEventListener("voiceschanged",load);return()=>window.speechSynthesis.removeEventListener("voiceschanged",load)},[]);
   useEffect(()=>{
-    const load=async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category),{cache:"no-store"});const j=await r.json();const nextItems=j.items||[];setItems(nextItems);if(nextItems.length)setTickerText(nextItems.slice(0,4).map((x:{title:string})=>x.title).join(" • "))}catch{notify("News feed connection failed")}finally{setLoading(false)}};
+    const load=async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category)+"&source="+encodeURIComponent(source),{cache:"no-store"});const j=await r.json();const nextItems=j.items||[];setItems(nextItems);if(nextItems.length)setTickerText(nextItems.slice(0,4).map((x:{title:string})=>x.title).join(" • "))}catch{notify("News feed connection failed")}finally{setLoading(false)}};
     load();const id=window.setInterval(load,refresh*60000);return()=>{window.clearInterval(id);stopVoice()};
-  },[refresh,category]);
+  },[refresh,category,source]);
   useEffect(()=>{if(autoVoice&&items.length)speakHeadline(items[selected%items.length])},[selected,autoVoice,voiceName]);
   useEffect(()=>{
     if(!items.length)return;
@@ -699,7 +699,7 @@ function News({notify}:{notify:(x:string)=>void}){
       <button onClick={()=>{if(!items.length){notify("No headline available");return}const next=(selected+1)%items.length;setSelected(next);if(autoVoice)speakHeadline(items[next])}}>▶ Next + Read</button>
       <button onClick={()=>current?speakHeadline(current):notify("No headline available")}>🔊 Read Current</button>
       <button onClick={stopVoice}>■ Stop Voice</button>
-      <button onClick={async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category),{cache:"no-store"});const j=await r.json();const nextItems=j.items||[];setItems(nextItems);setSelected(0);if(nextItems.length)setTickerText(nextItems.slice(0,4).map((x:{title:string})=>x.title).join(" • "));notify("Loaded "+nextItems.length+" headlines")}catch{notify("News refresh failed")}finally{setLoading(false)}}}>↻ Refresh Now</button>
+      <button onClick={async()=>{setLoading(true);try{const r=await fetch("/api/news?category="+encodeURIComponent(category)+"&source="+encodeURIComponent(source),{cache:"no-store"});const j=await r.json();const nextItems=j.items||[];setItems(nextItems);setSelected(0);if(nextItems.length)setTickerText(nextItems.slice(0,4).map((x:{title:string})=>x.title).join(" • "));notify("Loaded "+nextItems.length+" headlines")}catch{notify("News refresh failed")}finally{setLoading(false)}}}>↻ Refresh Now</button>
     </div>
   </div><div className="panel"><div className="title"><b>NEWS SOURCES</b></div>
     {["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD","BBC SPORT","STANDARD SPORTS","OPEN-METEO WEATHER"].map(s=><div className="health" key={s}><span>{s}</span><b>{source===s?"ACTIVE":"Ready"}</b></div>)}

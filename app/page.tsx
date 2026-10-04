@@ -114,7 +114,7 @@ export default function Home(){
 
   useEffect(()=>{
     if(!autoSchedule||!scheduleClock||!schedule.length)return;
-    const ordered=[...schedule].filter(r=>/^\\d{2}:\\d{2}$/.test(r[0]||"")).sort((a,b)=>a[0].localeCompare(b[0]));
+    const ordered=[...schedule].filter(r=>/^\d{2}:\d{2}$/.test(r[0]||"")).sort((a,b)=>a[0].localeCompare(b[0]));
     const row=[...ordered].reverse().find(r=>r[0]<=scheduleClock)||ordered[ordered.length-1];
     if(!row||lastAutoSlotRef.current===row[0])return;
     lastAutoSlotRef.current=row[0];
@@ -504,8 +504,8 @@ function Studio(p:{
     const base=layers.find(x=>x.id==="base");const cameraActive=p.activeSource==="camera"&&!!p.cameraStream;
   const screenActive=p.activeSource==="screen"&&!!p.screenStream; const newsActive=program&&p.activeSource==="news"&&!!p.newsOnAir;
     return <div className={"composition "+(program&&fadePulse?"programFade":"")} style={program?{"--fade-duration":p.fadeSpeed+"ms"} as React.CSSProperties:undefined} ref={!program?editorRef:null}>
-      {!base&&!program&&cameraActive&&<video ref={previewCameraRef} className="compositionCamera" autoPlay muted playsInline/>}{!base&&!program&&p.previewWebUrl&&<iframe ref={previewWebRef} className="compositionWeb" src={p.previewWebUrl} title="Preview Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
-      {!base&&program&&cameraActive&&<video ref={programCameraRef} className="compositionCamera" autoPlay muted={!p.programPlaying||p.muted} playsInline/>}{!base&&program&&p.programWebUrl&&<iframe ref={programWebRef} className="compositionWeb" src={p.programWebUrl} title="Program Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
+      {!base&&!program&&cameraActive&&<video ref={previewCameraRef} className="compositionCamera" autoPlay muted playsInline/>}{!base&&!program&&screenActive&&<video ref={previewScreenRef} className="compositionCamera" autoPlay muted playsInline/>}{!base&&!program&&p.previewWebUrl&&<iframe ref={previewWebRef} className="compositionWeb" src={p.previewWebUrl} title="Preview Web Source" allow="autoplay; encrypted-media; picture-in-picture" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
+      {!base&&program&&cameraActive&&<video ref={programCameraRef} className="compositionCamera" autoPlay muted={!p.programPlaying||p.muted} playsInline/>}{!base&&program&&screenActive&&<video ref={programScreenRef} className="compositionCamera" autoPlay muted={!p.programPlaying||p.muted} playsInline/>}{!base&&program&&p.programWebUrl&&<iframe ref={programWebRef} className="compositionWeb" src={p.programWebUrl} title="Program Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
       {newsActive&&<div className="compositionNews" style={{position:"absolute",inset:0,background:"#07111f",color:"#fff",overflow:"hidden",fontFamily:"Arial,sans-serif"}}>
         {p.newsOnAir?.image&&<img src={p.newsOnAir.image} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:.42}}/>}
         <div style={{position:"absolute",inset:0,background:"linear-gradient(90deg,rgba(3,12,25,.97) 0%,rgba(3,12,25,.82) 55%,rgba(3,12,25,.3) 100%)"}}/>
@@ -514,8 +514,8 @@ function Studio(p:{
         <div style={{position:"absolute",left:0,right:0,bottom:0,background:"rgba(215,25,32,.96)",padding:"10px 4%",fontSize:"clamp(10px,1.1vw,17px)",fontWeight:800,letterSpacing:.4}}>BREAKING / LIVE • {p.newsOnAir?.title}</div>
       </div>}
       {layers.map(l=>renderLayer(l,program))}
-      {!base&&!p.previewWebUrl&&!cameraActive&&!program&&<span className="screenEmpty">BUILD YOUR PREVIEW</span>}
-      {!base&&!p.programWebUrl&&!cameraActive&&program&&<span className="screenEmpty">PROGRAM STANDBY</span>}
+      {!base&&!p.previewWebUrl&&!cameraActive&&!screenActive&&!program&&<span className="screenEmpty">BUILD YOUR PREVIEW</span>}
+      {!base&&!p.programWebUrl&&!cameraActive&&!screenActive&&!newsActive&&program&&<span className="screenEmpty">PROGRAM STANDBY</span>}
     </div>
   };
 
@@ -626,7 +626,7 @@ function News({notify}:{notify:(x:string)=>void}){
   const speakWithKokoro=async(item:{title:string;description:string})=>{
     const headline=normalizeNewsText(item.title);
     const description=normalizeNewsText(item.description||"");
-    const text=("This is Digital Television Solution News. "+headline+(description?". "+description:"")).replace(/\\s+/g," ").trim();
+    const text=("This is CHEMCHEM TV KENYA News. "+headline+(description?". "+description:"")).replace(/\s+/g," ").trim();
     try{
       setSpeaking(true);
       if(!kokoroRef.current){

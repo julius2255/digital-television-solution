@@ -509,7 +509,11 @@ function Media({files,selected,select,remove,upload}:{files:MediaFile[];selected
 }
 
 function Schedule({rows,now,auto,setAuto,setRows,add,mediaFiles,playNow,showLogoMap,setShowLogoMap,imageFiles}:{rows:string[][];now:string;auto:boolean;setAuto:(v:boolean)=>void;setRows:(v:string[][])=>void;add:()=>void;mediaFiles:MediaFile[];playNow:(row:string[])=>void;showLogoMap:Record<string,string>;setShowLogoMap:(v:Record<string,string>)=>void;imageFiles:MediaFile[]}){function Schedule({rows,now,auto,setAuto,setRows,add,mediaFiles,playNow,showLogoMap,setShowLogoMap,imageFiles}:{rows:string[][];now:string;auto:boolean;setAuto:(v:boolean)=>void;setRows:(v:string[][])=>void;add:()=>void;mediaFiles:MediaFile[];playNow:(row:string[])=>void;showLogoMap:Record<string,string>;setShowLogoMap:(v:Record<string,string>)=>void;imageFiles:MediaFile[]}){
-  const ordered=[...rows].sort((a,b)=>(a[0]||"99:99").localeCompare(b[0]||"99:99"));\n  const currentIndex=ordered.findIndex(r=>(r[0]||"")===now);\n  const nextIndex=currentIndex>=0?((currentIndex+1)%ordered.length):-1;\n  const currentRow=currentIndex>=0?ordered[currentIndex]:null;\n  const nextRow=nextIndex>=0&&ordered.length?ordered[nextIndex]:null;
+  const ordered=[...rows].sort((a,b)=>(a[0]||"99:99").localeCompare(b[0]||"99:99"));
+  const currentIndex=ordered.findIndex(r=>(r[0]||"")===now);
+  const nextIndex=currentIndex>=0?((currentIndex+1)%ordered.length):-1;
+  const currentRow=currentIndex>=0?ordered[currentIndex]:null;
+  const nextRow=nextIndex>=0&&ordered.length?ordered[nextIndex]:null;
   const update=(i:number,j:number,v:string)=>setRows(rows.map((r,ri)=>ri===i?r.map((x,ci)=>ci===j?v:x):r));
   const remove=(i:number)=>setRows(rows.filter((_,ri)=>ri!==i));
   return <div className="panel full"><div className="title"><b>WEEKLY PROGRAMME SCHEDULE</b><div className="scheduleActions"><em className={auto?"green":""}>{auto?"AUTO ON":"AUTO OFF"}</em><button onClick={()=>setAuto(!auto)}>{auto?"Disable":"Enable"} Automation</button><button onClick={add}>＋ Add Programme</button></div></div>

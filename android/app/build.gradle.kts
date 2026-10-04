@@ -3,7 +3,7 @@ plugins {
 }
 android {
   namespace = "ke.chemchemtv.mobile"
-  compileSdk = 36
+  compileSdk = 37
   defaultConfig {
     applicationId = "ke.chemchemtv.mobile"
     minSdk = 23

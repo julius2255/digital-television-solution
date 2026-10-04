@@ -41,11 +41,11 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
       setPadding(20, 14, 20, 14)
     }
     server = EditText(this).apply {
-      hint = "Facebook RTMPS server URL (from Live Producer)"
+      hint = "RTMPS ingest URL OR server URL"
       setSingleLine(true)
     }
     key = EditText(this).apply {
-      hint = "Facebook stream key"
+      hint = "Stream key (leave empty when using a complete Facebook ingest URL)"
       setSingleLine(true)
       inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
     }
@@ -90,14 +90,17 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
     val base = server.text.toString().trim()
     val streamKey = key.text.toString().trim()
-    if (base.isEmpty() || streamKey.isEmpty()) {
-      Toast.makeText(this, "Enter RTMP server and stream key", Toast.LENGTH_SHORT).show()
+    if (base.isEmpty()) {
+      Toast.makeText(this, "Enter an RTMPS/RTMP ingest URL or server URL", Toast.LENGTH_SHORT).show()
       return
     }
-    val normalized = base.trimEnd()
-    val endpoint = normalized + "/" + streamKey
+    val endpoint = if (streamKey.isEmpty()) {
+      base
+    } else {
+      base.trimEnd('/') + "/" + streamKey
+    }
     if (!endpoint.startsWith("rtmps://", ignoreCase = true) && !endpoint.startsWith("rtmp://", ignoreCase = true)) {
-      Toast.makeText(this, "Use the exact RTMPS/RTMP URL from Facebook Live Producer", Toast.LENGTH_LONG).show()
+      Toast.makeText(this, "Use a valid rtmps:// or rtmp:// ingest endpoint", Toast.LENGTH_LONG).show()
       return
     }
     stream.startStream(endpoint)

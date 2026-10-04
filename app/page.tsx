@@ -323,7 +323,10 @@ function Studio(p:{
   const [canvasZoom,setCanvasZoom]=useState(100);
   const [snapToGrid,setSnapToGrid]=useState(true);
   const [gridSize,setGridSize]=useState(5);
-  const [showGrid,setShowGrid]=useState(true);\n  const [canvasPan,setCanvasPan]=useState({x:0,y:0});\n  const [handMode,setHandMode]=useState(false);\n  const panRef=useRef<{x:number;y:number;startX:number;startY:number}|null>(null);
+  const [showGrid,setShowGrid]=useState(true);
+  const [canvasPan,setCanvasPan]=useState({x:0,y:0});
+  const [handMode,setHandMode]=useState(false);
+  const panRef=useRef<{x:number;y:number;startX:number;startY:number}|null>(null);
 
   useEffect(()=>{if(p.preview&&(!p.previewLayers.some(x=>x.id==="base")||p.previewLayers.find(x=>x.id==="base")?.mediaId!==p.preview.id)){
     const kind=p.preview.type.startsWith("image/")?"image":"video";

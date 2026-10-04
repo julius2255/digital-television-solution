@@ -106,7 +106,7 @@ export default function Home(){
   };
 
   useEffect(()=>{
-    if(!autoSchedule||!scheduleClock||!mediaFiles.length)return;
+    if(!autoSchedule||!scheduleClock)return;
     const row=schedule.find(r=>r[0]===scheduleClock);
     if(!row||lastAutoSlotRef.current===scheduleClock)return;
     lastAutoSlotRef.current=scheduleClock;
@@ -691,7 +691,7 @@ function News({notify}:{notify:(x:string)=>void}){
         <small>{current.description||"Live newsroom update"} · COURTESY {source}</small>
       </div>}
       <div className="ticker"><strong>TOP STORIES</strong><div><span>{ticker?tickerText:"Ticker disabled"}</span><span>{ticker?tickerText:"Ticker disabled"}</span></div></div>
-      <div className="newsControls"><select value={category} onChange={e=>setCategory(e.target.value)}>{["Kenya","Africa","World","Sports","Business","Entertainment","Weather"].map(x=><option key={x}>{x}</option>)}</select>
+      <div className="newsControls"><select value={category} onChange={e=>{const next=e.target.value;setCategory(next);const defaults:Record<string,string>={Kenya:"STANDARD KENYA",Africa:"BBC WORLD",World:"BBC WORLD",Sports:"BBC SPORT",Business:"STANDARD BUSINESS",Entertainment:"STANDARD ENTERTAINMENT",Weather:"OPEN-METEO WEATHER"};setSource(defaults[next]||"STANDARD KENYA")}}>{["Kenya","Africa","World","Sports","Business","Entertainment","Weather"].map(x=><option key={x}>{x}</option>)}</select>
       <select value={source} onChange={e=>setSource(e.target.value)}>{["STANDARD KENYA","STANDARD POLITICS","STANDARD BUSINESS","STANDARD ENTERTAINMENT","STANDARD WORLD","BBC WORLD","BBC SPORT","STANDARD SPORTS","OPEN-METEO WEATHER"].map(x=><option key={x}>{x}</option>)}</select>
       <label><input type="checkbox" checked={autoVoice} onChange={e=>setAutoVoice(e.target.checked)}/> AUTO VOICE</label><label><input type="checkbox" checked={ticker} onChange={e=>setTicker(e.target.checked)}/> TICKER</label><label><input type="checkbox" checked={showLowerThird} onChange={e=>setShowLowerThird(e.target.checked)}/> LOWER THIRDS</label><label><input type="checkbox" checked={breaking} onChange={e=>setBreaking(e.target.checked)}/> BREAKING STYLE</label><label><input type="checkbox" checked={showClock} onChange={e=>setShowClock(e.target.checked)}/> CLOCK</label><input aria-label="Ticker text" value={tickerText} onChange={e=>setTickerText(e.target.value)} /><span>Refresh {refresh} min</span><select value={voiceEngine} onChange={e=>{const v=e.target.value as "kokoro"|"browser";setVoiceEngine(v);setVoiceName(v==="kokoro"?"af_bella":"")}}><option value="kokoro">Kokoro Neural AI — FREE</option><option value="browser">Browser Voice (fallback)</option></select><select value={voiceName} onChange={e=>setVoiceName(e.target.value)}>{voiceEngine==="kokoro" ? <><option value="af_bella">Bella — American Female</option><option value="af_heart">Heart — American Female</option><option value="am_fenrir">Fenrir — American Male</option></> : <><option value="">Best English voice</option>{voiceOptions.map(v=><option key={v.name+"-"+v.lang} value={v.name}>{v.name} ({v.lang})</option>)}</>}</select></div>
     </div>

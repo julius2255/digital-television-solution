@@ -360,7 +360,7 @@ function Studio(p:{
   setVolume:(v:number)=>void;setMuted:(v:boolean)=>void;togglePreview:()=>void;stopPreview:()=>void;toggleProgram:()=>void;
   take:(mode?:"cut"|"fade",time?:number)=>void;transition:"cut"|"fade";setTransition:(v:"cut"|"fade")=>void;
   live:boolean;toggleLive:()=>void;onProgramEnded?:()=>void;scenes:Scene[];activeScene:string;setActiveScene:(v:string)=>void;addScene:()=>void;
-  sources:Source[];activeSource:string;newsOnAir:NewsOnAir|null;setActiveSource:(v:string)=>void;addSource:()=>void;addWebSource:()=>void;
+  sources:Source[];activeSource:string;newsOnAir:NewsOnAir|null;setActiveSource:(v:string)=>void;addSource:()=>void;addWebSource:()=>void;switchProgramSource:(source:"camera"|"screen"|"news")=>void;
   mediaFiles:MediaFile[];selectMedia:(id:string)=>void;playMedia:(id:string)=>void;selectWeb:(url:string)=>void;upload:()=>void;cameraStream:MediaStream|null;cameraReady:boolean;cameraFacing:"user"|"environment";startCamera:()=>void;flipCamera:()=>void;stopCamera:()=>void;screenStream:MediaStream|null;screenReady:boolean;startScreenShare:()=>void;stopScreenShare:()=>void;
 }){
   const previewRef=useRef<HTMLVideoElement>(null);

@@ -95,6 +95,7 @@ export default function Home(){
   const [newsOnAir,setNewsOnAir]=useState<NewsOnAir|null>(null);
   const [broadcastDockOpen,setBroadcastDockOpen]=useState(false);
   const [livekitStatus,setLivekitStatus]=useState("CONNECTING");
+  const [connectorStatus,setConnectorStatus]=useState("OFFLINE");
   const livekitRoomRef=useRef<Room|null>(null);
   const livekitConnectPromiseRef=useRef<Promise<Room>|null>(null);
   const publishedTrackRefs=useRef<Record<string,MediaStreamTrack>>({});
@@ -229,6 +230,19 @@ export default function Home(){
         if(String(connectionState)==="connected")setTimeout(()=>publishProgramState(),100);
       });
       room.on(RoomEvent.DataReceived,(payload,_participant,_kind,topic)=>{
+        if(topic==="chemchem-encoder-status"){
+          try{
+            const msg=JSON.parse(new TextDecoder().decode(payload));
+            if(msg?.type==="chemchem-encoder-status"){
+              const detail=msg.detail?String(msg.detail):"";
+              const status=String(msg.status||"").toUpperCase();
+              setConnectorStatus((detail?status+" • "+detail:status));
+              if(status==="LIVE"||status==="NETWORK_WEAK"||status==="RECONNECTING")setConnected(prev=>({...prev,Facebook:true}));
+              if(status==="STOPPED"||status==="FACEBOOK_KEY_REJECTED")setConnected(prev=>({...prev,Facebook:false}));
+            }
+          }catch{}
+          return;
+        }
         if(topic!=="chemchem-program")return;
         try{
           const msg=JSON.parse(new TextDecoder().decode(payload));
@@ -571,7 +585,7 @@ export default function Home(){
       {section==="schedule"&&<Schedule rows={schedule} now={scheduleClock} auto={autoSchedule} setAuto={setAutoSchedule} setRows={setSchedule} add={addProgramme} mediaFiles={mediaFiles} playNow={playScheduled} showLogoMap={showLogoMap} setShowLogoMap={setShowLogoMap} imageFiles={mediaFiles.filter(f=>f.type.startsWith("image/"))}/>} 
       {section==="news"&&<News notify={notify}/>}
       {section==="media"&&<Media files={mediaFiles} selected={previewMediaId} select={selectMedia} remove={removeMedia} upload={()=>fileInputRef.current?.click()}/>}
-      {section==="streaming"&&<Streaming connected={connected} setConnected={setConnected} live={live} program={programMedia} preview={previewMedia} programWebUrl={programWebUrl} livekitStatus={livekitStatus}/>}
+      {section==="streaming"&&<Streaming connected={connected} setConnected={setConnected} live={live} program={programMedia} preview={previewMedia} programWebUrl={programWebUrl} livekitStatus={livekitStatus} connectorStatus={connectorStatus}/>}
       {section==="analytics"&&<Analytics live={live} program={programMedia} streamStartedAt={streamStartedAt} totalViews={totalViews} peakViewers={peakViewers} connected={connected}/>}
       {section==="settings"&&<Settings notify={notify}/>}
     </section>
@@ -986,7 +1000,7 @@ function News({notify}:{notify:(x:string)=>void}){
     <div className="panel" style={{marginTop:12}}><div className="title"><b>NEWS ANCHOR VOICE</b><em>{speaking?"ON AIR":"READY"}</em></div><p className="muted">Professional AI newsroom delivery. Free Kokoro Neural speech runs in the browser using WebGPU with WASM fallback. No paid API or account is required. The first use downloads the neural model and voice assets, then the browser caches them.</p><div className="health"><span>VOICE ENGINE</span><b>{voiceEngine==="kokoro"?"Kokoro Neural AI (free/local)":"English browser voices"}</b></div></div>
   </div></div>
 }
-function Streaming({connected,setConnected,live,program,preview,programWebUrl,livekitStatus}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean;program:MediaFile|null;preview:MediaFile|null;programWebUrl:string;livekitStatus:string}){
+function Streaming({connected,setConnected,live,program,preview,programWebUrl,livekitStatus,connectorStatus}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean;program:MediaFile|null;preview:MediaFile|null;programWebUrl:string;livekitStatus:string;connectorStatus:string}){
   const [autoReconnect,setAutoReconnect]=useState(true);
   const [standby,setStandby]=useState(true);
   const [bitrate,setBitrate]=useState(4500);
@@ -1079,38 +1093,29 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl,li
     setMessage("Facebook destination saved. Start the real cloud RTMP connection when your Program Output is ready.");
   };
 
-  const startFacebook=async()=>{
+  const startFacebook=()=>{
     setError("");setMessage("");setStreamError("");setEgressStatus("");setStreamStatus("");setStreamRetries(null);setStreamDuration(null);
     if(starting)return;
     if(!rtmpServer.trim()||!streamKey.trim()){setError("Enter the Facebook Server URL and Stream Key first.");return}
-    if(livekitStatus!=="CONNECTED"){setError("Director → LiveKit is not connected yet. Wait for LiveKit CONNECTED before starting Facebook.");return}
-    try{
-      setStarting(true);
-      const response=await fetch("/api/stream/start",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({server:rtmpServer.trim(),key:streamKey.trim(),name:"CHEMCHEM TV KENYA — PROGRAM / LIVE OUTPUT",resolution,bitrate,fps})
-      });
-      const d=await response.json();
-      if(!response.ok||!d.ok){setError(d.error||"Cloud Facebook stream could not be started.");return}
-      setEgressId(d.egressId||"");
-      setEgressStatus(d.status||"EGRESS_STARTING");
-      setEncoder(d.encoder||null);
-      setConnected({...connected,Facebook:true});
-      setMessage("Cloud egress is capturing the PROGRAM / LIVE OUTPUT composition. It is not streaming the selected library file directly.");
-    }catch(e:any){setError(e?.message||"Network error while starting the cloud stream.")}
-    finally{setStarting(false)}
+    if(!live){setError("Take a source to PROGRAM / LIVE before starting Facebook.");return}
+    const session=crypto.randomUUID();
+    const base=window.location.origin;
+    const output=base+"/output?name="+encodeURIComponent("CHEMCHEM TV KENYA — PROGRAM OUTPUT")+"&monitor=0&session="+encodeURIComponent(session);
+    const deepLink="chemchemtv://encoder?server="+encodeURIComponent(rtmpServer.trim())+"&key="+encodeURIComponent(streamKey.trim())+"&output="+encodeURIComponent(output)+"&base="+encodeURIComponent(base)+"&session="+encodeURIComponent(session);
+    setStarting(true);
+    setConnected({...connected,Facebook:true});
+    setMessage("Opening the CHEMCHEM Android Facebook Connector. Keep the connector running in the background.");
+    try{window.location.href=deepLink}catch(e){setError("Android Connector could not be opened.")}finally{window.setTimeout(()=>setStarting(false),1800)}
   };
 
-  const stopFacebook=async()=>{
+  const stopFacebook=()=>{
     setError("");setMessage("");
-    if(!egressId){setMessage("No active cloud egress ID is stored in this browser.");return}
+    const deepLink="chemchemtv://encoder?action=stop";
     try{
-      const r=await fetch("/api/stream/stop",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({egressId})});
-      const d=await r.json();
-      if(!r.ok||!d.ok){setError(d.error||"Cloud stream could not be stopped.");return}
-      setEgressId("");setEgressStatus("");setStreamError("");setStreamStatus("");setMessage("Facebook cloud stream stopped.");
-    }catch(e:any){setError(e?.message||"Network error while stopping the stream.")}
+      window.location.href=deepLink;
+      setConnected({...connected,Facebook:false});
+      setMessage("STOP command sent to the Android Connector. Facebook will disconnect after the encoder stops.");
+    }catch(e:any){setError("Android Connector could not be reached.")} 
   };
 
   const clearDestination=()=>{
@@ -1129,13 +1134,13 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl,li
         <div style={{background:"#000",borderRadius:10,overflow:"hidden",border:"1px solid rgba(255,255,255,.12)",aspectRatio:"16/9"}}>
           <iframe key={monitorUrl} src={monitorUrl} title="CHEMCHEM TV KENYA Program Output" allow="autoplay; encrypted-media; picture-in-picture" style={{width:"100%",height:"100%",border:0,display:"block"}} />
         </div>
-        <p className="muted">This monitor is the same public Program Output page captured by the cloud encoder. What you see here is what the Facebook egress is instructed to capture: camera, screen, image, video, web source, news and graphics according to the active Program.</p>
+        <p className="muted">This is the same public Program Output page used by the CHEMCHEM Android Connector. The connector captures this composed output and sends it to Facebook; uploaded media is never sent directly unless it is the current Program.</p>
         <div className="health"><span>PROGRAM OUTPUT</span><b>{egressId?"CAPTURED BY CLOUD EGRESS":"READY FOR CAPTURE"}</b></div>
       </div>
 
       <div className="panel" style={{marginTop:12}}>
         <div className="title"><b>FACEBOOK RTMPS</b><em>{egressId?"LIVE PIPELINE":connected.Facebook?"CONFIGURED":"READY"}</em></div>
-        <p className="muted">REAL path: Director Program → LiveKit room → public Program Output → Cloud Egress → Facebook RTMPS. Uploaded media is only one possible source; it is never sent directly unless it is the current Program composition.</p>
+        <p className="muted">REAL path: Director Program → public Program Output → CHEMCHEM Android Connector → Facebook RTMPS. Uploaded media is only one possible source; it is never sent directly unless it is the current Program composition.</p>
         <label>Facebook Server URL<input value={rtmpServer} onChange={e=>setRtmpServer(e.target.value)} placeholder="rtmps://live-api.facebook.com:443/rtmp/"/></label>
         <label>Facebook Stream Key<input type={showKey?"text":"password"} value={streamKey} onChange={e=>setStreamKey(e.target.value)} placeholder="Paste the current Facebook stream key"/></label>
         <label><input type="checkbox" checked={showKey} onChange={e=>setShowKey(e.target.checked)}/> Show stream key</label>
@@ -1159,12 +1164,12 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl,li
       </div>
 
       <div className="panel" style={{marginTop:12}}>
-        <div className="title"><b>REAL CLOUD BROADCAST ENGINE</b><em>{egressId?"STREAMING":"READY"}</em></div>
-        <p className="muted">LiveKit Egress renders the public Program Output page in a cloud browser and sends that composed result to Facebook RTMPS.</p>
+        <div className="title"><b>ANDROID FACEBOOK CONNECTOR</b><em>{connectorStatus.includes("LIVE")?"STREAMING":"READY"}</em></div>
+        <p className="muted">The Android Connector runs as a foreground background service. It captures only the Program Output, sends it to Facebook RTMPS, reconnects after weak-network interruptions, and stops only when you press STOP FACEBOOK STREAM.</p>
         <div className="health"><span>DIRECTOR → LIVEKIT</span><b>{livekitStatus}</b></div>
         <div className="health"><span>PROGRAM TO STREAM</span><b>PROGRAM / LIVE OUTPUT</b></div>
-        <div className="health"><span>FACEBOOK RTMP</span><b>{streamStatus==="ACTIVE"?"CONNECTED / ACTIVE":streamStatus||"WAITING"}</b></div>
-        <div className="health"><span>ENCODER</span><b>{encoder?((encoder.width||"—")+"×"+(encoder.height||"—")+" · "+(encoder.framerate||"—")+" FPS · "+(encoder.videoBitrateKbps||"—")+" kbps"):bitrate+" kbps target"}</b></div>
+        <div className="health"><span>FACEBOOK CONNECTION</span><b>{connectorStatus}</b></div>
+        <div className="health"><span>ANDROID ENCODER</span><b>{connectorStatus}</b></div>
         <div className="health"><span>UPTIME</span><b>{formatDuration(streamDuration)}</b></div>
         <div className="health"><span>RETRIES</span><b>{streamRetries??"—"}</b></div>
         <div className="buttons">{!egressId?<button onClick={startFacebook} className="big">{starting?"STARTING CLOUD ENCODER…":"● START REAL FACEBOOK STREAM"}</button>:<button onClick={stopFacebook} className="big">■ STOP FACEBOOK STREAM</button>}</div>
@@ -1175,8 +1180,8 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl,li
       <div className="title"><b>FACEBOOK DELIVERY / TELEMETRY</b></div>
       <p>✓ Program Output · <b>LIVE COMPOSITION</b></p>
       <p>✓ Facebook RTMPS · {connected.Facebook?"CONFIGURED":"NOT CONFIGURED"}</p>
-      <p>✓ Cloud egress · {egressId?(egressStatus||"STARTING"):"OFFLINE"}</p>
-      <p>✓ RTMP output · <b>{streamStatus||"WAITING"}</b></p>
+      <p>✓ Android Connector · <b>{connectorStatus}</b></p>
+      <p>✓ Facebook RTMPS · <b>{connectorStatus}</b></p>
       <p>✓ Director → LiveKit · {livekitStatus}</p>
       <p>✓ Encoder · {encoder?((encoder.width||"—")+"×"+(encoder.height||"—")+" @ "+(encoder.framerate||"—")+" FPS"):resolution+" @ "+fps+" FPS"}</p>
       <p>✓ Encoder video bitrate · {encoder?.videoBitrateKbps??bitrate} kbps</p>
@@ -1184,9 +1189,9 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl,li
       <p>✓ Uptime · {formatDuration(streamDuration)}</p>
       <p>✓ Retries · {streamRetries??"—"}</p>
       <p>✓ Stream started · {streamStartedAt?new Date(Number(streamStartedAt)/1000000>100000000000?Number(streamStartedAt)/1000000:Number(streamStartedAt)).toLocaleTimeString("en-KE",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"—"}</p>
-      <p>✓ Delivered bitrate · <b>NOT EXPOSED BY LIVEKIT</b></p>
+      <p>✓ Delivered bitrate · <b>{connectorStatus.includes("kbps")?connectorStatus:"Waiting for encoder telemetry"}</b></p>
       <div className="health"><span>RTMP connection</span><b>{streamStatus==="ACTIVE"?"LIVEKIT → FACEBOOK ACTIVE":streamStatus||"OFFLINE"}</b></div>
-      <p className="muted">The values above are real cloud egress telemetry. The encoder bitrate is the configured output bitrate. LiveKit's StreamInfo does not expose actual outgoing bytes/bitrate, so the system deliberately does not invent a delivered-kbps number.</p>
+      <p className="muted">The Facebook connection status and bitrate are reported by the Android encoder through the LiveKit data channel. No fake bitrate is displayed.</p>
       <p className="muted">Facebook's own Live Producer preview remains the final confirmation that Facebook is displaying moving Program Output. An ACTIVE RTMP connection proves the cloud encoder is connected to the destination, not that the Facebook UI preview has been visually verified.</p>
     </div>
   </div>

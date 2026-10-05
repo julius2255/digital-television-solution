@@ -1,17 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.INTERNET"/>
-  <uses-permission android:name="android.permission.RECORD_AUDIO"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
   <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
   <application
     android:theme="@style/Theme.ChemChemTV"
     android:label="CHEMCHEM TV KENYA"
     android:allowBackup="true"
-    android:supportsRtl="true"
-    android:allowAudioPlaybackCapture="true">
+    android:supportsRtl="true">
 
     <activity
       android:name=".MainActivity"
@@ -34,7 +31,7 @@
 
     <service
       android:name=".EncoderService"
-      android:foregroundServiceType="mediaPlayback|mediaProjection"
+      android:foregroundServiceType="mediaPlayback"
       android:exported="false"
       android:stopWithTask="false"/>
   </application>

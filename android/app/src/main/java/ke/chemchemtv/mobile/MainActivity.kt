@@ -272,6 +272,7 @@ class MainActivity : AppCompatActivity() {
       putExtra(BroadcastService.EXTRA_PROJECTION_RESULT,resultCode)
       putExtra(BroadcastService.EXTRA_ENDPOINT,endpoint)
     }
+    showCleanProgram()
     ContextCompat.startForegroundService(this,serviceIntent)
     status.text = "● STARTING ENCODER..."
     status.setTextColor(Color.rgb(255,193,7))

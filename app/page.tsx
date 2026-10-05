@@ -835,7 +835,8 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl}:{
     // The Android encoder must receive the actual program media, not the
     // control-room webpage and never the phone screen.
     const rawProgramUrl=program?.url||"";
-    const isDirectMedia=/^https?:\\/\\/.+\\.(mp4|webm|mov|m4v|jpg|jpeg|png|webp|gif)(?:[?#].*)?$/i.test(rawProgramUrl);
+    const cleanProgramUrl=rawProgramUrl.split("?")[0].toLowerCase();
+    const isDirectMedia=[".mp4",".webm",".mov",".m4v",".jpg",".jpeg",".png",".webp",".gif"].some(ext=>cleanProgramUrl.endsWith(ext));
 
     if(!isDirectMedia){
       if(programWebUrl){

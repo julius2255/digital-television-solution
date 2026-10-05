@@ -29,5 +29,4 @@ jobs:
         with:
           name: chemchem-tv-kenya-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
-      # Build and verify the real Facebook program-output encoder.
-  # CHEMCHEM encoder rebuild v2 — program video + playback audio.
+    

@@ -8,6 +8,14 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.graphics.Color
+import android.os.Handler
+import android.os.Looper
+import android.view.View
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
@@ -23,6 +31,15 @@ import com.pedro.encoder.input.sources.audio.NoAudioSource
 import com.pedro.encoder.input.sources.video.BitmapSource
 import com.pedro.encoder.input.sources.video.VideoFileSource
 import com.pedro.library.generic.GenericStream
+import io.livekit.android.LiveKit
+import io.livekit.android.room.Room
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.net.HttpURLConnection
 import java.net.URL
 
 /**
@@ -39,6 +56,9 @@ class EncoderService : Service(), ConnectChecker {
     const val ACTION_STATUS = "ke.chemchemtv.mobile.STATUS"
     const val EXTRA_ENDPOINT = "endpoint"
     const val EXTRA_MEDIA_URL = "mediaUrl"
+    const val EXTRA_OUTPUT_URL = "outputUrl"
+    const val EXTRA_BASE_URL = "baseUrl"
+    const val EXTRA_SESSION = "session"
     const val EXTRA_KIND = "kind"
     const val EXTRA_STATUS = "status"
 
@@ -48,6 +68,16 @@ class EncoderService : Service(), ConnectChecker {
 
   private var stream: GenericStream? = null
   private var starting = false
+  private var shouldRun = false
+  private val main = Handler(Looper.getMainLooper())
+  private val telemetryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+  private var webView: WebView? = null
+  private var livekitRoom: Room? = null
+  private var outputUrl = ""
+  private var baseUrl = ""
+  private var sessionId = ""
+  private var reconnectAttempts = 0
+  private var lastBitrate = 0L
 
   override fun onCreate() {
     super.onCreate()
@@ -57,21 +87,38 @@ class EncoderService : Service(), ConnectChecker {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
       ACTION_STOP -> {
+        shouldRun = false
+        main.removeCallbacksAndMessages(null)
         stopEncoder()
+        stopTelemetry()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
       }
       ACTION_START -> {
         val endpoint = intent.getStringExtra(EXTRA_ENDPOINT).orEmpty()
+        outputUrl = intent.getStringExtra(EXTRA_OUTPUT_URL).orEmpty()
+        baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty().trimEnd('/')
+        sessionId = intent.getStringExtra(EXTRA_SESSION).orEmpty()
         val mediaUrl = intent.getStringExtra(EXTRA_MEDIA_URL).orEmpty()
         val kind = intent.getStringExtra(EXTRA_KIND).orEmpty()
 
-        if (endpoint.isBlank() || (mediaUrl.isBlank() && kind != "CAMERA")) {
-          sendStatus("ERROR: Facebook RTMPS or Program media is missing")
+        if (endpoint.isBlank()) {
+          sendStatus("ERROR: Facebook RTMPS is missing")
           stopSelf()
         } else {
+          shouldRun = true
           promoteToForeground(kind == "CAMERA")
-          if (kind == "CAMERA") startCameraEncoder(endpoint) else startEncoder(endpoint, mediaUrl, kind)
+          if (outputUrl.isNotBlank() && baseUrl.isNotBlank()) {
+            startTelemetry()
+            startProgramOutputEncoder(endpoint)
+          } else if (kind == "CAMERA") {
+            startCameraEncoder(endpoint)
+          } else if (mediaUrl.isNotBlank()) {
+            startEncoder(endpoint, mediaUrl, kind)
+          } else {
+            sendStatus("ERROR: Program Output is missing")
+            stopSelf()
+          }
         }
       }
     }
@@ -90,6 +137,128 @@ class EncoderService : Service(), ConnectChecker {
     } else {
       startForeground(NOTIFICATION_ID, n)
     }
+  }
+
+  private fun startProgramOutputEncoder(endpoint: String) {
+    if (starting || stream?.isStreaming == true || !shouldRun) return
+    starting = true
+    stopStreamOnly()
+    main.post {
+      try {
+        ensureProgramWebView()
+        val newStream = GenericStream(
+          applicationContext,
+          this,
+          ProgramViewSource(webView!!),
+          SilentAudioSource()
+        )
+        newStream.getGlInterface().setForceRender(true, 30)
+        val videoReady = newStream.prepareVideo(1280, 720, 3500 * 1000, fps = 30, rotation = 0)
+        val audioReady = newStream.prepareAudio(44100, true, 128 * 1000, false, false)
+        if (!videoReady || !audioReady) {
+          newStream.release()
+          throw IllegalStateException("H.264/AAC encoder preparation failed")
+        }
+        stream = newStream
+        sendStatus("CONNECTING: Program Output → Facebook RTMPS")
+        updateNotification("CHEMCHEM TV KENYA • FACEBOOK CONNECTING")
+        newStream.startStream(endpoint)
+        starting = false
+      } catch (e: Exception) {
+        starting = false
+        sendStatus("ERROR: " + (e.message ?: "Program Output encoder failed"))
+        scheduleReconnect(endpoint)
+      }
+    }
+  }
+
+  private fun ensureProgramWebView() {
+    if (webView != null) return
+    val wv = WebView(applicationContext)
+    wv.setBackgroundColor(Color.BLACK)
+    wv.settings.javaScriptEnabled = true
+    wv.settings.domStorageEnabled = true
+    wv.settings.mediaPlaybackRequiresUserGesture = false
+    wv.settings.cacheMode = WebSettings.LOAD_DEFAULT
+    wv.webChromeClient = WebChromeClient()
+    wv.webViewClient = object : WebViewClient() {
+      override fun onPageFinished(view: WebView?, url: String?) {
+        sendStatus("PROGRAM OUTPUT READY")
+      }
+    }
+    wv.measure(
+      View.MeasureSpec.makeMeasureSpec(1280, View.MeasureSpec.EXACTLY),
+      View.MeasureSpec.makeMeasureSpec(720, View.MeasureSpec.EXACTLY)
+    )
+    wv.layout(0, 0, 1280, 720)
+    webView = wv
+    sendStatus("PROGRAM OUTPUT CONNECTING")
+    wv.loadUrl(outputUrl)
+  }
+
+  private fun scheduleReconnect(endpoint: String) {
+    if (!shouldRun) return
+    reconnectAttempts++
+    val delay = if (reconnectAttempts <= 3) 5000L else 10000L
+    sendStatus("NETWORK WEAK: reconnecting #$reconnectAttempts")
+    updateNotification("CHEMCHEM TV KENYA • RECONNECTING")
+    main.removeCallbacksAndMessages(null)
+    main.postDelayed({
+      if (shouldRun) startProgramOutputEncoder(endpoint)
+    }, delay)
+  }
+
+  private fun stopStreamOnly() {
+    try { stream?.stopStream() } catch (_: Exception) {}
+    try { stream?.release() } catch (_: Exception) {}
+    stream = null
+    starting = false
+  }
+
+  private fun startTelemetry() {
+    if (baseUrl.isBlank() || livekitRoom != null) return
+    telemetryScope.launch {
+      try {
+        val connection = (URL(baseUrl + "/api/livekit/token?role=connector").openConnection() as HttpURLConnection).apply {
+          requestMethod = "GET"
+          connectTimeout = 10000
+          readTimeout = 10000
+        }
+        val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+        connection.disconnect()
+        if (!json.optBoolean("ok")) throw IllegalStateException(json.optString("error", "LiveKit token failed"))
+        val room = LiveKit.create(applicationContext)
+        livekitRoom = room
+        room.connect(json.getString("url"), json.getString("token"))
+        publishTelemetry("CONNECTOR_CONNECTED", "Android Facebook bridge connected")
+      } catch (e: Exception) {
+        sendStatus("TELEMETRY OFFLINE: " + (e.message ?: "LiveKit unavailable"))
+      }
+    }
+  }
+
+  private fun publishTelemetry(status: String, detail: String) {
+    val room = livekitRoom ?: return
+    val payload = JSONObject()
+      .put("type", "chemchem-encoder-status")
+      .put("version", 1)
+      .put("sessionId", sessionId)
+      .put("status", status)
+      .put("detail", detail)
+      .put("bitrateKbps", lastBitrate / 1000L)
+      .put("fps", 30)
+      .put("quality", if (lastBitrate >= 3000000L) "STRONG" else if (lastBitrate >= 1500000L) "GOOD" else if (lastBitrate >= 700000L) "WEAK" else "CONNECTING")
+      .put("retries", reconnectAttempts)
+      .put("sentAt", System.currentTimeMillis())
+      .toString().toByteArray(Charsets.UTF_8)
+    telemetryScope.launch {
+      try { room.localParticipant.publishData(payload, topic = "chemchem-encoder-status") } catch (_: Exception) {}
+    }
+  }
+
+  private fun stopTelemetry() {
+    try { livekitRoom?.disconnect() } catch (_: Exception) {}
+    livekitRoom = null
   }
 
   private fun startEncoder(endpoint: String, mediaUrl: String, kind: String) {
@@ -235,10 +404,10 @@ class EncoderService : Service(), ConnectChecker {
   }
 
   private fun stopEncoder() {
-    starting = false
-    try { stream?.stopStream() } catch (_: Exception) {}
-    try { stream?.release() } catch (_: Exception) {}
-    stream = null
+    stopStreamOnly()
+    try { webView?.stopLoading() } catch (_: Exception) {}
+    try { webView?.destroy() } catch (_: Exception) {}
+    webView = null
   }
 
   private fun sendStatus(value: String) {
@@ -290,21 +459,24 @@ class EncoderService : Service(), ConnectChecker {
   override fun onConnectionStarted(url: String) { sendStatus("CONNECTING") }
   override fun onConnectionSuccess() {
     starting = false
-    sendStatus("LIVE")
-    updateNotification("CHEMCHEM TV KENYA • LIVE • VIDEO + AUDIO")
+    reconnectAttempts = 0
+    sendStatus("LIVE: Facebook Connected • 30 FPS")
+    updateNotification("CHEMCHEM TV KENYA • LIVE • FACEBOOK CONNECTED")
   }
   override fun onNewBitrate(bitrate: Long) {
-    sendStatus("LIVE • " + (bitrate / 1000) + " kbps")
+    lastBitrate = bitrate
+    val kbps = bitrate / 1000
+    val quality = if (bitrate >= 3000000L) "STRONG" else if (bitrate >= 1500000L) "GOOD" else if (bitrate >= 700000L) "WEAK" else "VERY WEAK"
+    sendStatus("LIVE: Facebook Connected • ${kbps} kbps • 30 FPS • ${quality}")
+    updateNotification("CHEMCHEM TV • LIVE • ${kbps} kbps • ${quality}")
   }
   override fun onConnectionFailed(reason: String) {
     starting = false
-    sendStatus("ERROR: " + reason)
-    updateNotification("CHEMCHEM TV KENYA • FACEBOOK ERROR")
+    if (shouldRun) scheduleReconnect(endpoint) else sendStatus("ERROR: " + reason)
   }
   override fun onDisconnect() {
     starting = false
-    sendStatus("DISCONNECTED")
-    updateNotification("CHEMCHEM TV KENYA • DISCONNECTED")
+    if (shouldRun) scheduleReconnect(endpoint) else sendStatus("DISCONNECTED")
   }
   override fun onAuthError() {
     starting = false
@@ -314,7 +486,11 @@ class EncoderService : Service(), ConnectChecker {
   override fun onAuthSuccess() = Unit
 
   override fun onDestroy() {
+    shouldRun = false
+    main.removeCallbacksAndMessages(null)
     stopEncoder()
+    stopTelemetry()
+    telemetryScope.cancel()
     super.onDestroy()
   }
 }

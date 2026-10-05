@@ -119,7 +119,9 @@ class EncoderService : Service(), ConnectChecker {
           val audioSource = if (audioInfo != null) {
             AudioFileSource(applicationContext, uri, true)
           } else {
-            NoAudioSource()
+            // Always provide a real AAC clock/track to the RTMPS muxer.
+            // This prevents Facebook from seeing a video-only ingest.
+            SilentAudioSource()
           }
 
           newStream = GenericStream(applicationContext, this, videoSource, audioSource)
@@ -142,8 +144,8 @@ class EncoderService : Service(), ConnectChecker {
           }
 
           stream = newStream
-          sendStatus("PROGRAM READY")
-          sendStatus("CONNECTING")
+          sendStatus("PROGRAM READY • H.264 720P + AAC")
+          sendStatus("CONNECTING • FACEBOOK RTMPS")
           updateNotification("CHEMCHEM TV KENYA • FACEBOOK CONNECTING")
           newStream.startStream(endpoint)
           return@Thread
@@ -163,8 +165,8 @@ class EncoderService : Service(), ConnectChecker {
         }
 
         stream = newStream
-        sendStatus("PROGRAM READY")
-        sendStatus("CONNECTING")
+        sendStatus("PROGRAM READY • H.264 720P + AAC")
+        sendStatus("CONNECTING • FACEBOOK RTMPS")
         updateNotification("CHEMCHEM TV KENYA • FACEBOOK CONNECTING")
         newStream.startStream(endpoint)
       } catch (e: Exception) {

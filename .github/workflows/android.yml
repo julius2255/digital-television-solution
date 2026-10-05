@@ -29,4 +29,4 @@ jobs:
         with:
           name: chemchem-tv-kenya-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
-      # Build the same Android encoder used for the real Facebook program output.
+      # Build and verify the real Facebook program-output encoder.

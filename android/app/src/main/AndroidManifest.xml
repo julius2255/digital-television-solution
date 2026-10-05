@@ -6,7 +6,7 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
   <uses-feature android:name="android.hardware.camera" android:required="false"/>
   <application android:allowAudioPlaybackCapture="true" android:theme="@style/Theme.ChemChemTV" android:label="CHEMCHEM TV KENYA" android:allowBackup="true" android:supportsRtl="true">
-    <activity android:name=".MainActivity" android:screenOrientation="landscape" android:launchMode="singleTop" android:exported="true">
+    <activity android:name=".MainActivity" android:screenOrientation="portrait" android:launchMode="singleTop" android:exported="true">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>
         <category android:name="android.intent.category.LAUNCHER"/>

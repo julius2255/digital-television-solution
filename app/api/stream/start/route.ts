@@ -33,14 +33,29 @@ export async function POST(req: NextRequest) {
     const identity = "chemchem-egress-api-" + randomUUID();
     const authToken = createEgressApiToken(apiKey, apiSecret, identity);
     const endpoint = livekitHttpUrl(lkUrl) + "/twirp/livekit.Egress/StartEgress";
-    const preset = resolution === "1280x720" ? "H264_720P_30" : "H264_1080P_30";
+    const [width, height] = resolution.split("x").map(Number);
+    const safeWidth = Number.isFinite(width) ? width : 1920;
+    const safeHeight = Number.isFinite(height) ? height : 1080;
+    const safeFps = Math.max(15, Math.min(60, Number(body.fps) || 30));
+    const safeBitrate = Math.max(1500, Math.min(9000, Number(body.bitrate) || 4500));
 
+    // Use explicit encoding options so the Director's selected resolution/FPS/bitrate
+    // are the actual cloud encoder settings. Do not silently fall back to a preset.
     const egressRequest = {
       web: {
         url: outputUrl,
         await_start_signal: false
       },
-      preset,
+      advanced: {
+        width: safeWidth,
+        height: safeHeight,
+        framerate: safeFps,
+        audioCodec: "AAC",
+        audioBitrate: 128,
+        videoCodec: "H264_HIGH",
+        videoBitrate: safeBitrate,
+        keyFrameInterval: 2
+      },
       outputs: [
         {
           stream: {
@@ -74,6 +89,15 @@ export async function POST(req: NextRequest) {
       egressId: data.egress_id || data.egressId,
       status: data.status,
       outputUrl,
+      encoder: {
+        width: safeWidth,
+        height: safeHeight,
+        framerate: safeFps,
+        videoBitrateKbps: safeBitrate,
+        audioBitrateKbps: 128,
+        videoCodec: "H264_HIGH",
+        audioCodec: "AAC"
+      },
       destination: "FACEBOOK RTMPS",
       message: "Facebook cloud egress started from the Program / LIVE OUTPUT composition."
     });

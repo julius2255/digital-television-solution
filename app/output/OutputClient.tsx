@@ -204,9 +204,9 @@ export default function OutputClient({ name }: { name: string }) {
     const audio = silenceRef.current;
     if (!audio) return;
     audio.volume = 1;
-    audio.muted = false;
+    audio.muted = monitor;
     audio.play().catch(() => {});
-  }, []);
+  }, [monitor]);
 
   useEffect(() => {
     const video = document.getElementById("chemchem-output-base-video") as HTMLVideoElement | null;
@@ -227,7 +227,7 @@ export default function OutputClient({ name }: { name: string }) {
 
     if (state.playing) video.play().catch(() => {});
     else video.pause();
-  }, [state]);
+  }, [state, monitor]);
 
   const renderBaseMedia = () => {
     const media = state?.media;

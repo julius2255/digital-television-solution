@@ -268,6 +268,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     try {
+      // The projection must contain only the clean Program Output.
+      // Status/encoder controls stay in the notification instead.
+      status.visibility = android.view.View.GONE
       ContextCompat.startForegroundService(this, intent)
       streamStarted = true
       status.text = "CHEMCHEM TV KENYA • FACEBOOK CONNECTING • VIDEO + AUDIO ENGINE"

@@ -123,12 +123,14 @@ class MainActivity : AppCompatActivity() {
     // captured program once the encoder enters capture mode.
     root.post {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        setPictureInPictureParams(
-          PictureInPictureParams.Builder()
-            .setAspectRatio(Rational(16, 9))
-            .setAutoEnterEnabled(true)
-            .build()
-        )
+        val builder = PictureInPictureParams.Builder()
+          .setAspectRatio(Rational(16, 9))
+        // setAutoEnterEnabled() was added in Android 12 (API 31).
+        // Calling it on Android 8–11 causes a startup NoSuchMethodError.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+          builder.setAutoEnterEnabled(true)
+        }
+        setPictureInPictureParams(builder.build())
       }
     }
   }

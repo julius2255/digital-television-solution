@@ -827,26 +827,36 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl}:{
   const openAndroidEncoder=()=>{
     setError("");setMessage("");
     if(!live){setError("Start CHEMCHEM TV KENYA ON AIR first.");return;}
-    if(!connected.Facebook||!rtmpServer.trim()||!streamKey.trim()){setError("Configure Facebook RTMPS with the current Server URL and Stream Key first.");return;}
-    const rawProgramUrl=program?.url||programWebUrl||"";
-    const outputUrl=window.location.origin+"/output?"+new URLSearchParams({
-      name:program?.name||"CHEMCHEM TV KENYA — PROGRAM",
-      src:rawProgramUrl.startsWith("http://")||rawProgramUrl.startsWith("https://")?rawProgramUrl:"",
-      kind:programWebUrl?"WEB / YOUTUBE":program?"MEDIA":"STANDBY"
-    }).toString();
+    if(!connected.Facebook||!rtmpServer.trim()||!streamKey.trim()){
+      setError("Configure the Facebook Server URL and Stream Key first.");
+      return;
+    }
+
+    // The Android encoder must receive the actual program media, not the
+    // control-room webpage and never the phone screen.
+    const rawProgramUrl=program?.url||"";
+    const isDirectMedia=/^https?:\\/\\/.+\\.(mp4|webm|mov|m4v|jpg|jpeg|png|webp|gif)(?:[?#].*)?$/i.test(rawProgramUrl);
+
+    if(!isDirectMedia){
+      if(programWebUrl){
+        setError("This Program is a Web/YouTube source. The native encoder now streams direct media only; YouTube/web ingest will be added as a separate input.");
+      }else{
+        setError("Select a direct program video or image before starting Facebook.");
+      }
+      return;
+    }
+
     const params=new URLSearchParams({
       server:rtmpServer.trim(),
       key:streamKey.trim(),
-      program:program?.name||"Standby",
-      source:programWebUrl?"Web/YouTube":program?"Media":"Standby",
-      webUrl:outputUrl,
-      mediaUrl:rawProgramUrl.startsWith("http://")||rawProgramUrl.startsWith("https://")?rawProgramUrl:"",
-      preview:preview?.name||""
+      program:program?.name||"CHEMCHEM TV KENYA — PROGRAM",
+      source:"PROGRAM MEDIA",
+      mediaUrl:rawProgramUrl
     });
     const deepLink="chemchemtv://encoder?"+params.toString();
-    setMessage("Opening the CHEMCHEM Android encoder with the current Facebook destination and Program feed.");
+    setMessage("Opening the native CHEMCHEM encoder. It will decode the Program media and send H.264/AAC directly to Facebook RTMPS — no screen sharing.");
     window.location.href=deepLink;
-    window.setTimeout(()=>setMessage("If Android did not open, install/update the CHEMCHEM TV KENYA Android app on this same phone and tap OPEN ANDROID ENCODER again."),1200);
+    window.setTimeout(()=>setMessage("If Android did not open, install/update the CHEMCHEM TV KENYA encoder on this same phone and tap OPEN ANDROID ENCODER again."),1200);
   };
   const goLive=()=>openAndroidEncoder();
   const clearDestination=()=>{

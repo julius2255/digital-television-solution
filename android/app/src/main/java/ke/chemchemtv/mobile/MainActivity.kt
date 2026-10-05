@@ -10,6 +10,7 @@ import android.view.Gravity
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.VideoView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,20 +31,26 @@ class MainActivity : AppCompatActivity() {
     if (uri == null) return@registerForActivityResult
     try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
     selectedUri = uri
-    mediaName.text = "PROGRAM: " + (uri.lastPathSegment ?: "Selected video")
+    mediaName.text = "PROGRAM • " + (uri.lastPathSegment ?: "Selected video")
     preview.setVideoURI(uri)
     preview.setOnPreparedListener { mp -> mp.isLooping = true; mp.start() }
-    status.text = "CHEMCHEM TV KENYA • PROGRAM READY"
+    status.text = "READY • PROGRAM LOADED"
   }
 
   private val statusReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
       val value = intent?.getStringExtra(EncoderService.EXTRA_STATUS) ?: return
       runOnUiThread {
-        status.text = "CHEMCHEM TV KENYA • " + value
+        status.text = value
         when {
-          value == "LIVE" || value.startsWith("LIVE •") -> { live = true; startButton.text = "STOP LIVE" }
-          value.startsWith("ERROR") || value == "DISCONNECTED" || value.contains("REJECTED") -> { live = false; startButton.text = "START LIVE" }
+          value == "LIVE" || value.startsWith("LIVE •") -> {
+            live = true
+            startButton.text = "STOP LIVE"
+          }
+          value.startsWith("ERROR") || value == "DISCONNECTED" || value.contains("REJECTED") -> {
+            live = false
+            startButton.text = "START LIVE"
+          }
         }
       }
     }
@@ -52,57 +59,183 @@ class MainActivity : AppCompatActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-    buildUi()
+    buildStudio()
     ContextCompat.registerReceiver(this, statusReceiver, IntentFilter(EncoderService.ACTION_STATUS), ContextCompat.RECEIVER_NOT_EXPORTED)
   }
 
-  private fun buildUi() {
-    val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(18,18,18,18); setBackgroundColor(0xFF080808.toInt()) }
-    val title = TextView(this).apply { text = "CHEMCHEM TV KENYA"; textSize = 24f; setTextColor(0xFFFFFFFF.toInt()); gravity = Gravity.CENTER; setPadding(0,8,0,14) }
-    root.addView(title)
+  private fun buildStudio() {
+    val root = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL
+      setPadding(14, 12, 14, 12)
+      setBackgroundColor(0xFF07090D.toInt())
+    }
+
+    val header = LinearLayout(this).apply {
+      orientation = LinearLayout.HORIZONTAL
+      gravity = Gravity.CENTER_VERTICAL
+    }
+    val title = TextView(this).apply {
+      text = "CHEMCHEM TV KENYA"
+      textSize = 21f
+      setTextColor(0xFFFFFFFF.toInt())
+    }
+    header.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
+    header.addView(TextView(this).apply {
+      text = "● OFFLINE"
+      textSize = 12f
+      setTextColor(0xFFB0B7C3.toInt())
+    })
+    root.addView(header)
+
+    val tabs = LinearLayout(this).apply {
+      orientation = LinearLayout.HORIZONTAL
+      setPadding(0, 10, 0, 8)
+    }
+    listOf("PREVIEW", "PROGRAM").forEach {
+      tabs.addView(TextView(this).apply {
+        text = it
+        textSize = 12f
+        setTextColor(0xFFFFFFFF.toInt())
+        gravity = Gravity.CENTER
+        setBackgroundColor(0xFF171C24.toInt())
+        setPadding(18, 10, 18, 10)
+      }, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(3, 0, 3, 0) })
+    }
+    root.addView(tabs)
+
     preview = VideoView(this).apply { setBackgroundColor(0xFF000000.toInt()) }
-    root.addView(preview, LinearLayout.LayoutParams(-1,0,1.0f))
-    mediaName = TextView(this).apply { text = "PROGRAM: No video selected"; textSize = 13f; setTextColor(0xFFDDDDDD.toInt()); setPadding(4,12,4,8) }
+    root.addView(preview, LinearLayout.LayoutParams(-1, 0, 1f))
+
+    mediaName = TextView(this).apply {
+      text = "PROGRAM • No media selected"
+      textSize = 12f
+      setTextColor(0xFFD7DCE5.toInt())
+      setPadding(4, 9, 4, 5)
+    }
     root.addView(mediaName)
-    val choose = Button(this).apply { text = "SELECT PROGRAM VIDEO"; setOnClickListener { picker.launch(arrayOf("video/mp4","video/*")) } }
-    root.addView(choose)
-    serverInput = EditText(this).apply { hint = "Facebook RTMPS Server"; setText("rtmps://live-api-s.facebook.com:443/rtmp/"); setTextColor(0xFFFFFFFF.toInt()); setHintTextColor(0xFF888888.toInt()); isSingleLine = true }
+
+    val sourceRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+    sourceRow.addView(Button(this).apply {
+      text = "VIDEO"
+      setOnClickListener { picker.launch(arrayOf("video/mp4", "video/*")) }
+    }, LinearLayout.LayoutParams(0, -2, 1f))
+    sourceRow.addView(Button(this).apply {
+      text = "IMAGE"
+      setOnClickListener { status.text = "IMAGE SOURCE • NEXT STUDIO MODULE" }
+    }, LinearLayout.LayoutParams(0, -2, 1f))
+    sourceRow.addView(Button(this).apply {
+      text = "LAYERS"
+      setOnClickListener { status.text = "LAYERS • NEXT STUDIO MODULE" }
+    }, LinearLayout.LayoutParams(0, -2, 1f))
+    root.addView(sourceRow)
+
+    val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+    controls.addView(Button(this).apply {
+      text = "CUT"
+      setOnClickListener { status.text = "CUT • PROGRAM SOURCE ACTIVE" }
+    }, LinearLayout.LayoutParams(0, -2, 1f))
+    controls.addView(Button(this).apply {
+      text = "FADE"
+      setOnClickListener { status.text = "FADE • PROGRAM TRANSITION" }
+    }, LinearLayout.LayoutParams(0, -2, 1f))
+    controls.addView(Button(this).apply {
+      text = "PLAYLIST"
+      setOnClickListener { status.text = "PLAYLIST • NEXT STUDIO MODULE" }
+    }, LinearLayout.LayoutParams(0, -2, 1f))
+    root.addView(controls)
+
+    serverInput = EditText(this).apply {
+      hint = "Facebook RTMPS Server"
+      setText("rtmps://live-api-s.facebook.com:443/rtmp/")
+      setTextColor(0xFFFFFFFF.toInt())
+      setHintTextColor(0xFF7F8794.toInt())
+      isSingleLine = true
+    }
     root.addView(serverInput)
-    keyInput = EditText(this).apply { hint = "Facebook Stream Key"; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD; setTextColor(0xFFFFFFFF.toInt()); setHintTextColor(0xFF888888.toInt()); isSingleLine = true }
+
+    keyInput = EditText(this).apply {
+      hint = "Facebook Stream Key"
+      inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+      setTextColor(0xFFFFFFFF.toInt())
+      setHintTextColor(0xFF7F8794.toInt())
+      isSingleLine = true
+    }
     root.addView(keyInput)
-    startButton = Button(this).apply { text = "START LIVE"; setOnClickListener { toggleLive() } }
+
+    startButton = Button(this).apply {
+      text = "START LIVE"
+      setOnClickListener { toggleLive() }
+    }
     root.addView(startButton)
-    status = TextView(this).apply { text = "CHEMCHEM TV KENYA • READY"; textSize = 14f; setTextColor(0xFFFFFFFF.toInt()); gravity = Gravity.CENTER; setPadding(4,12,4,10) }
+
+    status = TextView(this).apply {
+      text = "READY • SELECT A VIDEO"
+      textSize = 13f
+      setTextColor(0xFFFFFFFF.toInt())
+      gravity = Gravity.CENTER
+      setPadding(4, 8, 4, 6)
+    }
     root.addView(status)
-    val note = TextView(this).apply { text = "Native H.264 + AAC encoder • Facebook RTMPS\nThe APK broadcasts the selected Program video — it does not share the phone screen."; textSize = 11f; setTextColor(0xFF999999.toInt()); gravity = Gravity.CENTER; setPadding(4,4,4,8) }
-    root.addView(note)
-    setContentView(root)
+
+    root.addView(TextView(this).apply {
+      text = "Native broadcast engine • H.264 + AAC • RTMPS\nOnly the encoded Program output is sent to Facebook. The phone screen is never broadcast."
+      textSize = 10f
+      setTextColor(0xFF8E96A3.toInt())
+      gravity = Gravity.CENTER
+      setPadding(4, 2, 4, 4)
+    })
+
+    val scroll = ScrollView(this)
+    scroll.addView(root)
+    setContentView(scroll)
   }
 
   private fun toggleLive() {
     if (live) {
       stopService(Intent(this, EncoderService::class.java).setAction(EncoderService.ACTION_STOP))
-      live = false; startButton.text = "START LIVE"; status.text = "CHEMCHEM TV KENYA • STOPPED"; return
+      live = false
+      startButton.text = "START LIVE"
+      status.text = "STOPPED"
+      return
     }
+
     val uri = selectedUri
-    if (uri == null) { status.text = "CHEMCHEM TV KENYA • SELECT A PROGRAM VIDEO"; return }
+    if (uri == null) {
+      status.text = "ERROR • SELECT A PROGRAM VIDEO FIRST"
+      return
+    }
+
     val server = serverInput.text.toString().trim()
     val key = keyInput.text.toString().trim()
-    if (server.isBlank() || key.isBlank()) { status.text = "CHEMCHEM TV KENYA • ENTER FACEBOOK STREAM KEY"; return }
+    if (server.isBlank() || key.isBlank()) {
+      status.text = "ERROR • ENTER FACEBOOK STREAM KEY"
+      return
+    }
+
     val endpoint = server.trimEnd('/') + "/" + key.trimStart('/')
-    if (!endpoint.startsWith("rtmp://") && !endpoint.startsWith("rtmps://")) { status.text = "CHEMCHEM TV KENYA • INVALID RTMP SERVER"; return }
+    if (!endpoint.startsWith("rtmp://") && !endpoint.startsWith("rtmps://")) {
+      status.text = "ERROR • INVALID RTMP/RTMPS SERVER"
+      return
+    }
+
     val intent = Intent(this, EncoderService::class.java).apply {
       action = EncoderService.ACTION_START
       putExtra(EncoderService.EXTRA_ENDPOINT, endpoint)
       putExtra(EncoderService.EXTRA_MEDIA_URL, uri.toString())
       putExtra(EncoderService.EXTRA_KIND, "VIDEO")
     }
+
     try {
       ContextCompat.startForegroundService(this, intent)
-      status.text = "CHEMCHEM TV KENYA • CONNECTING TO FACEBOOK"
+      status.text = "CONNECTING • FACEBOOK RTMPS"
       startButton.text = "CONNECTING..."
-    } catch (e: Exception) { status.text = "CHEMCHEM TV KENYA • ERROR: " + (e.message ?: "encoder start failed") }
+    } catch (e: Exception) {
+      status.text = "ERROR • " + (e.message ?: "encoder start failed")
+    }
   }
 
-  override fun onDestroy() { try { unregisterReceiver(statusReceiver) } catch (_: Exception) {}; super.onDestroy() }
+  override fun onDestroy() {
+    try { unregisterReceiver(statusReceiver) } catch (_: Exception) {}
+    super.onDestroy()
+  }
 }

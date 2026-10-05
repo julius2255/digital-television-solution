@@ -353,7 +353,35 @@ export default function Home(){
     delete publishedTrackRefs.current[name];
   };
 
-  const startCamera=async()=>try{if(cameraStreamRef.current){setCameraReady(true);setActiveSource("camera");return;}const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:cameraFacing}},audio:true});cameraStreamRef.current=stream;setCameraReady(true);setActiveSource("camera");setPreviewMediaId("");setPreviewWebUrl("");setPreviewPlaying(true);setPreviewLayers([]);notify(cameraFacing==="user"?"Front camera is ready in Preview":"Back camera is ready in Preview")}catch{notify("Camera access was denied or is unavailable")}};
+  const startCamera=async()=>{
+    try{
+      if(cameraStreamRef.current){
+        setCameraReady(true);
+        setActiveSource("camera");
+        return;
+      }
+      const stream=await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:{ideal:cameraFacing}},
+        audio:true
+      });
+      const videoTrack=stream.getVideoTracks()[0];
+      if(!videoTrack)throw new Error("No camera video track was created.");
+      await publishDirectorTrack(videoTrack,"director-camera-video",Track.Source.Camera);
+      const mic=stream.getAudioTracks()[0];
+      if(mic)await publishDirectorTrack(mic,"director-camera-audio",Track.Source.Microphone);
+      cameraStreamRef.current=stream;
+      setCameraReady(true);
+      setActiveSource("camera");
+      setPreviewMediaId("");
+      setPreviewWebUrl("");
+      setPreviewPlaying(true);
+      setPreviewLayers([]);
+      setProgramPosition(0);
+      notify(cameraFacing==="user"?"Front camera is live in Director Preview":"Back camera is live in Director Preview");
+    }catch(error:any){
+      notify(error?.message||"Camera access was denied or LiveKit publishing failed");
+    }
+  };
   const flipCamera=async()=>{
     const next=cameraFacing==="user"?"environment":"user" as "user"|"environment";
     try{
@@ -419,19 +447,31 @@ export default function Home(){
   };
 
   const take=(mode:"cut"|"fade"=transition,time=previewTime)=>{
-    if(!previewMedia&&!previewWebUrl&&previewLayers.length===0){
+    const directSource = activeSource==="camera" || activeSource==="screen" || activeSource==="news";
+    if(!previewMedia&&!previewWebUrl&&previewLayers.length===0&&!directSource){
       notify("Build a Preview composition first");
+      return;
+    }
+    if(activeSource==="camera" && !cameraStreamRef.current){
+      notify("Camera is not connected to the Director");
+      return;
+    }
+    if(activeSource==="screen" && !screenStreamRef.current){
+      notify("Screen capture is not connected to the Director");
+      return;
+    }
+    if(activeSource==="news" && !newsOnAir){
+      notify("News is still loading");
       return;
     }
     setProgramMediaId(previewMedia?.id||"");
     setProgramWebUrl(youtubeEmbedUrl(previewWebUrl)||previewWebUrl);
-    setProgramPlaying(previewWebUrl?true:previewPlaying);
+    setProgramPlaying(previewWebUrl?true:(directSource?true:previewPlaying));
     setProgramTime(time);
     setProgramLayers(previewLayers.map(x=>({...x})));
     setTransition(mode);
     notify(mode==="fade"?"FADE full Preview composition to Program":"CUT full Preview composition to Program");
   };
-
   const togglePreview=()=>{
     if(previewWebUrl){
       if(isYoutubeEmbed(previewWebUrl)){setPreviewPlaying(v=>!v);return}

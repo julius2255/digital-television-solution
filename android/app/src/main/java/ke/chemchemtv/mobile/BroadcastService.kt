@@ -50,7 +50,7 @@ class BroadcastService : Service(), ConnectChecker {
     val notification = buildNotification("CHEMCHEM TV KENYA is broadcasting")
     if (Build.VERSION.SDK_INT >= 29) {
       ServiceCompat.startForeground(this, NOTIFICATION_ID, notification,
-        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
     } else {
       startForeground(NOTIFICATION_ID, notification)
     }

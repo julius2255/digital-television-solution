@@ -41,47 +41,66 @@ export async function POST(req: NextRequest) {
 
     // Use explicit encoding options so the Director's selected resolution/FPS/bitrate
     // are the actual cloud encoder settings. Do not silently fall back to a preset.
-    const egressRequest = {
-      web: {
-        url: outputUrl,
-        await_start_signal: false
-      },
-      advanced: {
-        width: safeWidth,
-        height: safeHeight,
-        framerate: safeFps,
-        audioCodec: "AAC",
-        audioBitrate: 128,
-        videoCodec: "H264_HIGH",
-        videoBitrate: safeBitrate,
-        keyFrameInterval: 2
-      },
-      outputs: [
-        {
-          stream: {
-            protocol: "RTMP",
-            urls: [facebookUrl]
-          }
-        }
-      ]
+    const advanced = {
+      width: safeWidth,
+      height: safeHeight,
+      framerate: safeFps,
+      audio_codec: "AAC",
+      audio_bitrate: 128,
+      video_codec: "H264_HIGH",
+      video_bitrate: safeBitrate,
+      key_frame_interval: 2
     };
 
-    const response = await fetch(endpoint, {
+    // LiveKit Cloud/current servers use unified StartEgress. Some older
+    // Egress deployments still expose the deprecated StartWebEgress RPC,
+    // so retry with that exact API if the unified request is rejected.
+    const egressRequest = {
+      web: { url: outputUrl, await_start_signal: false },
+      advanced,
+      outputs: [{ stream: { protocol: "RTMP", urls: [facebookUrl] } }]
+    };
+
+    const headers = {
+      Authorization: "Bearer " + authToken,
+      "Content-Type": "application/json"
+    };
+
+    let response = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        Authorization: "Bearer " + authToken,
-        "Content-Type": "application/json"
-      },
+      headers,
       body: JSON.stringify(egressRequest),
       cache: "no-store"
     });
 
-    const text = await response.text();
+    let text = await response.text();
     let data: any;
     try { data = JSON.parse(text); } catch { data = { raw: text }; }
 
     if (!response.ok) {
-      return NextResponse.json({ ok: false, error: data?.message || data?.error || "LiveKit rejected the egress request.", details: data }, { status: 502 });
+      const legacyEndpoint = livekitHttpUrl(lkUrl) + "/twirp/livekit.Egress/StartWebEgress";
+      const legacyRequest = {
+        url: outputUrl,
+        await_start_signal: false,
+        advanced,
+        stream_outputs: [{ protocol: "RTMP", urls: [facebookUrl] }]
+      };
+      response = await fetch(legacyEndpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(legacyRequest),
+        cache: "no-store"
+      });
+      text = await response.text();
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+    }
+
+    if (!response.ok) {
+      return NextResponse.json({
+        ok: false,
+        error: data?.message || data?.error || data?.raw || "LiveKit rejected the egress request.",
+        details: data
+      }, { status: 502 });
     }
 
     return NextResponse.json({

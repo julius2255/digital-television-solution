@@ -70,29 +70,29 @@ class EncoderService : Service(), ConnectChecker {
           sendStatus("ERROR: Facebook RTMPS or Program media is missing")
           stopSelf()
         } else {
-          promoteToForeground()
-          if (kind == "CAMERA") startCameraEncoder(endpoint) else startEncoder(endpoint, mediaUrl)
+          promoteToForeground(kind == "CAMERA")
+          if (kind == "CAMERA") startCameraEncoder(endpoint) else startEncoder(endpoint, mediaUrl, kind)
         }
       }
     }
     return START_STICKY
   }
 
-  private fun promoteToForeground() {
+  private fun promoteToForeground(camera: Boolean = false) {
     val n = notification("CHEMCHEM TV KENYA • NATIVE ENCODER STARTING")
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
       ServiceCompat.startForeground(
         this,
         NOTIFICATION_ID,
         n,
-        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+        if (camera) android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
       )
     } else {
       startForeground(NOTIFICATION_ID, n)
     }
   }
 
-  private fun startEncoder(endpoint: String, mediaUrl: String) {
+  private fun startEncoder(endpoint: String, mediaUrl: String, kind: String) {
     if (starting || stream?.isStreaming == true) return
 
     starting = true
@@ -105,7 +105,7 @@ class EncoderService : Service(), ConnectChecker {
 
         val newStream: GenericStream
 
-        if (isImage(lower)) {
+        if (kind == "IMAGE" || isImage(lower)) {
           val bitmap = applicationContext.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
             ?: throw IllegalStateException("Could not download Program image")
           newStream = GenericStream(

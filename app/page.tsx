@@ -2,6 +2,7 @@
 
 import {useEffect,useRef,useState} from "react";
 import {upload} from "@vercel/blob/client";
+import {Room, RoomEvent, Track} from "livekit-client";
 type Section="studio"|"playlist"|"schedule"|"news"|"media"|"streaming"|"analytics"|"settings";
 type MediaFile={id:string;name:string;type:string;url:string;size:number};
 type NewsOnAir={title:string;description:string;image?:string;source?:string;category?:string;published?:string;link?:string};
@@ -93,12 +94,20 @@ export default function Home(){
   const fileInputRef=useRef<HTMLInputElement>(null);
   const [newsOnAir,setNewsOnAir]=useState<NewsOnAir|null>(null);
   const [broadcastDockOpen,setBroadcastDockOpen]=useState(false);
+  const [livekitStatus,setLivekitStatus]=useState("CONNECTING");
+  const livekitRoomRef=useRef<Room|null>(null);
+  const livekitConnectPromiseRef=useRef<Promise<Room>|null>(null);
+  const publishedTrackRefs=useRef<Record<string,MediaStreamTrack>>({});
+  const programStateRef=useRef<any>(null);
+  const [programPosition,setProgramPosition]=useState(0);
+  const programPositionRef=useRef(0);
   useEffect(()=>{
     let cancelled=false;
     const loadNews=async()=>{try{const r=await fetch("/api/news?category=Kenya&source=STANDARD%20KENYA",{cache:"no-store"});const j=await r.json();const item=j.items?.[0];if(!cancelled&&item)setNewsOnAir(item)}catch{}};
     loadNews();const id=window.setInterval(loadNews,120000);return()=>{cancelled=true;window.clearInterval(id)};
   },[]);
 
+  useEffect(()=>{programPositionRef.current=programPosition},[programPosition]);
   useEffect(()=>{try{const s=localStorage.getItem("dtv-schedule");if(s)setSchedule(JSON.parse(s));const a=localStorage.getItem("dtv-auto-schedule");if(a!==null)setAutoSchedule(a==="true");const pl=localStorage.getItem("dtv-playlist");if(pl)setPlaylistIds(JSON.parse(pl));const fs=localStorage.getItem("dtv-fade-speed");if(fs)setFadeSpeed(Number(fs));const cl=localStorage.getItem("dtv-channel-logo");if(cl)setChannelLogoId(cl);const sl=localStorage.getItem("dtv-show-logos");if(sl)setShowLogoMap(JSON.parse(sl))}catch{}},[]);
   useEffect(()=>{try{localStorage.setItem("dtv-schedule",JSON.stringify(schedule));localStorage.setItem("dtv-auto-schedule",String(autoSchedule));localStorage.setItem("dtv-playlist",JSON.stringify(playlistIds));localStorage.setItem("dtv-fade-speed",String(fadeSpeed));localStorage.setItem("dtv-channel-logo",channelLogoId);localStorage.setItem("dtv-show-logos",JSON.stringify(showLogoMap))}catch{}},[schedule,autoSchedule,playlistIds,fadeSpeed,channelLogoId,showLogoMap]);
   useEffect(()=>{const tick=()=>{const d=new Date();const t=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");setScheduleClock(t)};tick();const id=window.setInterval(tick,15000);return()=>window.clearInterval(id)},[]);
@@ -172,6 +181,96 @@ export default function Home(){
   const previewMedia=mediaFiles.find(f=>f.id===previewMediaId)||null;
   const programMedia=mediaFiles.find(f=>f.id===programMediaId)||null;
 
+  const buildProgramState=()=>{
+    const pack=(m:MediaFile|null)=>m?{url:m.url,name:m.name,type:m.type}:null;
+    return {
+      type:"chemchem-program-state",
+      version:1,
+      source:activeSource,
+      playing:programPlaying,
+      position:programPositionRef.current,
+      webUrl:programWebUrl,
+      media:pack(programMedia),
+      layers:programLayers.map(l=>({...l,media:pack(mediaFiles.find(f=>f.id===l.mediaId)||null)})),
+      newsOnAir,
+      volume,
+      muted,
+      transition,
+      fadeMs:fadeSpeed,
+      sentAt:Date.now()
+    };
+  };
+
+  const publishProgramState=async()=>{
+    const room=livekitRoomRef.current;
+    if(!room||room.state!=="connected")return;
+    const next={...(programStateRef.current||buildProgramState()),position:programPositionRef.current,sentAt:Date.now()};
+    programStateRef.current=next;
+    try{
+      await room.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify(next)),
+        {reliable:true,topic:"chemchem-program"}
+      );
+    }catch{}
+  };
+
+  const ensureLiveKit=async():Promise<Room>=>{
+    if(livekitRoomRef.current)return livekitRoomRef.current;
+    if(livekitConnectPromiseRef.current)return livekitConnectPromiseRef.current;
+
+    livekitConnectPromiseRef.current=(async()=>{
+      const r=await fetch("/api/livekit/token?role=director",{cache:"no-store"});
+      const j=await r.json();
+      if(!r.ok||!j.ok)throw new Error(j.error||"LiveKit Director token could not be created.");
+
+      const room=new Room({adaptiveStream:true,dynacast:true});
+      room.on(RoomEvent.ConnectionStateChanged,(connectionState)=>{
+        setLivekitStatus(String(connectionState).toUpperCase());
+        if(String(connectionState)==="connected")setTimeout(()=>publishProgramState(),100);
+      });
+      room.on(RoomEvent.DataReceived,(payload,_participant,_kind,topic)=>{
+        if(topic!=="chemchem-program")return;
+        try{
+          const msg=JSON.parse(new TextDecoder().decode(payload));
+          if(msg?.type==="chemchem-program-request")publishProgramState();
+        }catch{}
+      });
+      room.on(RoomEvent.Disconnected,()=>setLivekitStatus("DISCONNECTED"));
+      await room.connect(j.url,j.token);
+      livekitRoomRef.current=room;
+      setLivekitStatus("CONNECTED");
+      setTimeout(()=>publishProgramState(),100);
+      return room;
+    })();
+
+    try{return await livekitConnectPromiseRef.current}
+    finally{livekitConnectPromiseRef.current=null}
+  };
+
+  useEffect(()=>{programStateRef.current=buildProgramState()},[
+    activeSource,programPlaying,programPosition,programMediaId,programWebUrl,
+    programLayers,newsOnAir,volume,muted,transition,fadeSpeed,mediaFiles
+  ]);
+
+  useEffect(()=>{
+    ensureLiveKit().catch((error:any)=>{
+      setLivekitStatus("ERROR");
+      notify(error?.message||"LiveKit Director connection failed");
+    });
+    return()=>{
+      livekitRoomRef.current?.disconnect();
+      livekitRoomRef.current=null;
+      Object.values(publishedTrackRefs.current).forEach(t=>{try{t.stop()}catch{}});
+      publishedTrackRefs.current={};
+    };
+  },[]);
+
+  useEffect(()=>{
+    const id=window.setInterval(()=>publishProgramState(),3000);
+    return()=>window.clearInterval(id);
+  },[]);
+
+
   const addFiles=async(files:FileList|null)=>{
     if(!files)return;
     const selected=Array.from(files);
@@ -238,11 +337,71 @@ export default function Home(){
     setScenes(v=>[...v,scene]);setActiveScene(scene.id);notify("Scene added");
   };
 
-  const startCamera=async()=>{try{if(cameraStreamRef.current){setCameraReady(true);setActiveSource("camera");return;}const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:cameraFacing}},audio:true});cameraStreamRef.current=stream;setCameraReady(true);setActiveSource("camera");setPreviewMediaId("");setPreviewWebUrl("");setPreviewPlaying(true);setPreviewLayers([]);notify(cameraFacing==="user"?"Front camera is ready in Preview":"Back camera is ready in Preview")}catch{notify("Camera access was denied or is unavailable")}};
-  const flipCamera=async()=>{const next=cameraFacing==="user"?"environment":"user" as "user"|"environment";try{if(cameraStreamRef.current)cameraStreamRef.current.getTracks().forEach(t=>t.stop());const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{exact:next}},audio:true});cameraStreamRef.current=stream;setCameraFacing(next);setCameraReady(true);setActiveSource("camera");notify(next==="user"?"Switched to front camera":"Switched to back camera")}catch{try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:next}},audio:true});cameraStreamRef.current=stream;setCameraFacing(next);setCameraReady(true);setActiveSource("camera");notify(next==="user"?"Switched to front camera":"Switched to back camera")}catch{notify("Could not switch camera on this device")}}};
-  const stopCamera=()=>{cameraStreamRef.current?.getTracks().forEach(t=>t.stop());cameraStreamRef.current=null;setCameraReady(false);if(activeSource==="camera")setActiveSource("video");notify("Camera source stopped")};
-  const startScreenShare=async()=>{try{if(!navigator.mediaDevices?.getDisplayMedia){notify("Screen capture is not supported by this browser");return;}if(screenStreamRef.current){setScreenReady(true);setActiveSource("screen");return;}const stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});screenStreamRef.current=stream;setScreenReady(true);setActiveSource("screen");setPreviewMediaId("");setPreviewWebUrl("");setPreviewPlaying(true);setPreviewLayers([]);stream.getVideoTracks()[0]?.addEventListener("ended",()=>{screenStreamRef.current=null;setScreenReady(false);if(activeSource==="screen")setActiveSource("video");notify("Screen sharing stopped")});notify("Screen capture is ready in Preview")}catch{notify("Screen sharing was cancelled or unavailable")}};
-  const stopScreenShare=()=>{screenStreamRef.current?.getTracks().forEach(t=>t.stop());screenStreamRef.current=null;setScreenReady(false);if(activeSource==="screen")setActiveSource("video");notify("Screen capture stopped")};
+  const publishDirectorTrack=async(track:MediaStreamTrack,name:string,source:Track.Source)=>{
+    const room=await ensureLiveKit();
+    const previous=publishedTrackRefs.current[name];
+    if(previous&&previous!==track){try{await room.localParticipant.unpublishTrack(previous,false)}catch{}}
+    const options:any={name,source};
+    if(track.kind==="video")options.simulcast=false;
+    await room.localParticipant.publishTrack(track,options);
+    publishedTrackRefs.current[name]=track;
+  };
+  const unpublishDirectorTrack=async(name:string)=>{
+    const room=livekitRoomRef.current;
+    const track=publishedTrackRefs.current[name];
+    if(room&&track){try{await room.localParticipant.unpublishTrack(track,false)}catch{}}
+    delete publishedTrackRefs.current[name];
+  };
+
+  const startCamera=async()=>try{if(cameraStreamRef.current){setCameraReady(true);setActiveSource("camera");return;}const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:cameraFacing}},audio:true});cameraStreamRef.current=stream;setCameraReady(true);setActiveSource("camera");setPreviewMediaId("");setPreviewWebUrl("");setPreviewPlaying(true);setPreviewLayers([]);notify(cameraFacing==="user"?"Front camera is ready in Preview":"Back camera is ready in Preview")}catch{notify("Camera access was denied or is unavailable")}};
+  const flipCamera=async()=>{
+    const next=cameraFacing==="user"?"environment":"user" as "user"|"environment";
+    try{
+      await unpublishDirectorTrack("director-camera-video");
+      await unpublishDirectorTrack("director-camera-audio");
+      cameraStreamRef.current?.getTracks().forEach(t=>t.stop());
+      let stream:MediaStream;
+      try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{exact:next}},audio:true});}
+      catch{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:next}},audio:true});}
+      await publishDirectorTrack(stream.getVideoTracks()[0],"director-camera-video",Track.Source.Camera);
+      const mic=stream.getAudioTracks()[0];
+      if(mic)await publishDirectorTrack(mic,"director-camera-audio",Track.Source.Microphone);
+      cameraStreamRef.current=stream;setCameraFacing(next);setCameraReady(true);setActiveSource("camera");
+      notify(next==="user"?"Switched to front camera":"Switched to back camera");
+    }catch(error:any){notify(error?.message||"Could not switch camera on this device")}
+  };
+  const stopCamera=async()=>{
+    await unpublishDirectorTrack("director-camera-video");
+    await unpublishDirectorTrack("director-camera-audio");
+    cameraStreamRef.current?.getTracks().forEach(t=>t.stop());
+    cameraStreamRef.current=null;setCameraReady(false);
+    if(activeSource==="camera")setActiveSource("video");
+    notify("Camera source stopped");
+  };
+  const startScreenShare=async()=>{
+    try{
+      if(!navigator.mediaDevices?.getDisplayMedia){notify("Screen capture is not supported by this browser");return;}
+      if(screenStreamRef.current){setScreenReady(true);setActiveSource("screen");return;}
+      const stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
+      const videoTrack=stream.getVideoTracks()[0];
+      if(!videoTrack)throw new Error("No screen video track was created.");
+      await publishDirectorTrack(videoTrack,"director-screen-video",Track.Source.ScreenShare);
+      const audioTrack=stream.getAudioTracks()[0];
+      if(audioTrack)await publishDirectorTrack(audioTrack,"director-screen-audio",Track.Source.ScreenShareAudio);
+      screenStreamRef.current=stream;setScreenReady(true);setActiveSource("screen");
+      setPreviewMediaId("");setPreviewWebUrl("");setPreviewPlaying(true);setPreviewLayers([]);setProgramPosition(0);
+      videoTrack.addEventListener("ended",()=>{void stopScreenShare()});
+      notify("Screen capture is live in Director");
+    }catch(error:any){notify(error?.message||"Screen sharing or LiveKit publishing failed")}
+  };
+  const stopScreenShare=async()=>{
+    await unpublishDirectorTrack("director-screen-video");
+    await unpublishDirectorTrack("director-screen-audio");
+    screenStreamRef.current?.getTracks().forEach(t=>t.stop());
+    screenStreamRef.current=null;setScreenReady(false);
+    if(activeSource==="screen")setActiveSource("video");
+    notify("Screen capture stopped");
+  };
   const addSource=()=>{
     const name=prompt("Source name","New Source");
     if(!name?.trim())return;
@@ -299,7 +458,7 @@ export default function Home(){
   const movePlaylist=(id:string,dir:number)=>setPlaylistIds(v=>{const i=v.indexOf(id),j=i+dir;if(i<0||j<0||j>=v.length)return v;const a=[...v];[a[i],a[j]]=[a[j],a[i]];return a});
   const removeFromPlaylist=(id:string)=>setPlaylistIds(v=>v.filter(x=>x!==id));
   const addToPlaylist=(id:string)=>setPlaylistIds(v=>v.includes(id)?v:[...v,id]);
-  const playPlaylistItem=(id:string)=>{const file=mediaFiles.find(x=>x.id===id);if(!file)return;setPreviewMediaId(id);setPreviewWebUrl("");setPreviewTime(0);setPreviewPlaying(false);setProgramMediaId(id);setProgramWebUrl("");setProgramTime(0);setProgramPlaying(true);const layers=buildBroadcastLayers(file);setProgramLayers(layers);setPreviewLayers(layers.map(x=>({...x})));notify("RUN ORDER: "+file.name)};
+  const playPlaylistItem=(id:string)=>{const file=mediaFiles.find(x=>x.id===id);if(!file)return;setPreviewMediaId(id);setPreviewWebUrl("");setPreviewTime(0);setPreviewPlaying(false);setProgramMediaId(id);setProgramWebUrl("");setProgramTime(0);setProgramPosition(0);setProgramPlaying(true);const layers=buildBroadcastLayers(file);setProgramLayers(layers);setPreviewLayers(layers.map(x=>({...x})));notify("RUN ORDER: "+file.name)};
   const playNextPlaylistItem=(currentId:string)=>{const i=playlistIds.indexOf(currentId);const nextId=playlistIds[i+1];if(nextId){playPlaylistItem(nextId);return true}return false};
 
   const playScheduled=(row:string[])=>{
@@ -349,7 +508,7 @@ export default function Home(){
     <header className="topbar">
       <div className="brand"><div className="logo">CTV</div><div><b>CHEMCHEM TV KENYA</b><small>Professional Broadcast Control Room</small></div></div>
       <div className={"air "+(live?"on":"")}><i/> {live?"ON AIR":"STANDBY"}</div>
-      <div className="actions"><span>● System Ready</span><button className="go" onClick={toggleLive}>{live?"STOP LIVE":"GO LIVE"}</button></div>
+      <div className="actions"><span>● LiveKit {livekitStatus}</span><button className="go" onClick={toggleLive}>{live?"STOP LIVE":"GO LIVE"}</button></div>
     </header>
 
     <nav className="workTabs">{tabs.map(([id,icon,label])=><button key={id} className={"workTab "+(section===id?"active":"")} onClick={()=>setSection(id)}><span>{icon}</span>{label}</button>)}</nav>
@@ -359,7 +518,7 @@ export default function Home(){
         <Studio
           preview={previewMedia} program={programMedia} previewWebUrl={previewWebUrl} programWebUrl={programWebUrl} previewPlaying={previewPlaying} programPlaying={programPlaying}
           previewTime={previewTime} programTime={programTime} volume={volume} muted={muted} fadeSpeed={fadeSpeed} setFadeSpeed={setFadeSpeed} channelLogoId={channelLogoId} setChannelLogoId={setChannelLogoId} showLogoMap={showLogoMap} setShowLogoMap={setShowLogoMap}
-          previewLayers={previewLayers} setPreviewLayers={setPreviewLayers} programLayers={programLayers}
+          previewLayers={previewLayers} setPreviewLayers={setPreviewLayers} programLayers={programLayers} setProgramPosition={(v)=>{programPositionRef.current=v;setProgramPosition(v)}}
           setVolume={setVolume} setMuted={setMuted} togglePreview={togglePreview} stopPreview={stopPreview}
           toggleProgram={toggleProgram} take={take} transition={transition} setTransition={setTransition} live={live} toggleLive={toggleLive}
           onProgramEnded={()=>{const current=programMediaId;if(current&&playNextPlaylistItem(current))return;setProgramPlaying(false);setProgramTime(0);notify("Program item finished — waiting for the next scheduled item")}}
@@ -372,7 +531,7 @@ export default function Home(){
       {section==="schedule"&&<Schedule rows={schedule} now={scheduleClock} auto={autoSchedule} setAuto={setAutoSchedule} setRows={setSchedule} add={addProgramme} mediaFiles={mediaFiles} playNow={playScheduled} showLogoMap={showLogoMap} setShowLogoMap={setShowLogoMap} imageFiles={mediaFiles.filter(f=>f.type.startsWith("image/"))}/>} 
       {section==="news"&&<News notify={notify}/>}
       {section==="media"&&<Media files={mediaFiles} selected={previewMediaId} select={selectMedia} remove={removeMedia} upload={()=>fileInputRef.current?.click()}/>}
-      {section==="streaming"&&<Streaming connected={connected} setConnected={setConnected} live={live} program={programMedia} preview={previewMedia} programWebUrl={programWebUrl}/>}
+      {section==="streaming"&&<Streaming connected={connected} setConnected={setConnected} live={live} program={programMedia} preview={previewMedia} programWebUrl={programWebUrl} livekitStatus={livekitStatus}/>}
       {section==="analytics"&&<Analytics live={live} program={programMedia} streamStartedAt={streamStartedAt} totalViews={totalViews} peakViewers={peakViewers} connected={connected}/>}
       {section==="settings"&&<Settings notify={notify}/>}
     </section>
@@ -398,7 +557,7 @@ export default function Home(){
 function Studio(p:{
   preview:MediaFile|null;program:MediaFile|null;previewWebUrl:string;programWebUrl:string;previewPlaying:boolean;programPlaying:boolean;
   previewTime:number;programTime:number;volume:number;muted:boolean;fadeSpeed:number;setFadeSpeed:(v:number)=>void;channelLogoId:string;setChannelLogoId:(v:string)=>void;showLogoMap:Record<string,string>;setShowLogoMap:(v:Record<string,string>)=>void;
-  previewLayers:StudioLayer[];setPreviewLayers:(v:StudioLayer[]|((v:StudioLayer[])=>StudioLayer[]))=>void;programLayers:StudioLayer[];
+  previewLayers:StudioLayer[];setPreviewLayers:(v:StudioLayer[]|((v:StudioLayer[])=>StudioLayer[]))=>void;programLayers:StudioLayer[];setProgramPosition:(v:number)=>void;
   setVolume:(v:number)=>void;setMuted:(v:boolean)=>void;togglePreview:()=>void;stopPreview:()=>void;toggleProgram:()=>void;
   take:(mode?:"cut"|"fade",time?:number)=>void;transition:"cut"|"fade";setTransition:(v:"cut"|"fade")=>void;
   live:boolean;toggleLive:()=>void;onProgramEnded?:()=>void;scenes:Scene[];activeScene:string;setActiveScene:(v:string)=>void;addScene:()=>void;
@@ -534,7 +693,7 @@ function Studio(p:{
     const node=l.kind==="image"?<img style={mediaStyle} src={media.url} alt={media.name}/>:<video style={mediaStyle}
       ref={l.id==="base"?(program?programRef:previewRef):undefined}
       src={media.url} muted={!program||l.id!=="base"||p.muted} autoPlay={program?p.programPlaying:p.previewPlaying} loop={l.id!=="base"} playsInline preload="auto"
-      onTimeUpdate={l.id==="base"?(e=>{if(program)setProgramClock(e.currentTarget.currentTime);else setPreviewClock(e.currentTarget.currentTime)}):undefined}
+      onTimeUpdate={l.id==="base"?(e=>{if(program){setProgramClock(e.currentTarget.currentTime);p.setProgramPosition(e.currentTarget.currentTime)}else setPreviewClock(e.currentTarget.currentTime)}):undefined}
       onLoadedMetadata={l.id==="base"?(e=>{e.currentTarget.currentTime=program?p.programTime:p.previewTime}):undefined}
       onEnded={l.id==="base"?(e=>{if(program)p.onProgramEnded?.();else p.stopPreview()}):undefined}
     />;
@@ -562,7 +721,7 @@ function Studio(p:{
   };
 
   const screen=(program:boolean)=><div className="screenWrap">
-    <div className="screenLabel"><b>{program?"PROGRAM":"PREVIEW"}</b><span>{program?(p.programPlaying?"LIVE":"STANDBY"):(p.previewPlaying?"PLAYING":"EDIT MODE")}</span></div>
+    <div className="screenLabel"><b>{program?"PROGRAM / LIVE OUTPUT":"PREVIEW"}</b><span>{program?(p.programPlaying?"LIVE":"STANDBY"):(p.previewPlaying?"PLAYING":"EDIT MODE")}</span></div>
     <div className="screen">{composition(program)}{program&&p.program&&<div className="liveBadge">{p.programPlaying?"LIVE":"PROGRAM"}</div>}</div>
     <div className="previewControls"><button className="playMain" onClick={program?p.toggleProgram:p.togglePreview}>{program?(p.programPlaying?"Ⅱ Pause":"▶ Play"):(p.previewPlaying?"Ⅱ Pause":"▶ Play")}</button><span>{program?fmt(programClock):fmt(previewClock)}</span><div className="miniMeter"><i className={((program?p.programPlaying:p.previewPlaying)&&!p.muted)?"meterLive":""}/></div><button onClick={()=>p.setMuted(!p.muted)}>{p.muted?"🔇":"🔊"}</button><input type="range" min="0" max="1" step=".01" value={p.volume} onChange={e=>p.setVolume(Number(e.target.value))}/></div>
   </div>;
@@ -787,7 +946,7 @@ function News({notify}:{notify:(x:string)=>void}){
     <div className="panel" style={{marginTop:12}}><div className="title"><b>NEWS ANCHOR VOICE</b><em>{speaking?"ON AIR":"READY"}</em></div><p className="muted">Professional AI newsroom delivery. Free Kokoro Neural speech runs in the browser using WebGPU with WASM fallback. No paid API or account is required. The first use downloads the neural model and voice assets, then the browser caches them.</p><div className="health"><span>VOICE ENGINE</span><b>{voiceEngine==="kokoro"?"Kokoro Neural AI (free/local)":"English browser voices"}</b></div></div>
   </div></div>
 }
-function Streaming({connected,setConnected,live,program,preview,programWebUrl}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean;program:MediaFile|null;preview:MediaFile|null;programWebUrl:string}){
+function Streaming({connected,setConnected,live,program,preview,programWebUrl,livekitStatus}:{connected:Record<string,boolean>;setConnected:(v:Record<string,boolean>)=>void;live:boolean;program:MediaFile|null;preview:MediaFile|null;programWebUrl:string;livekitStatus:string}){
   const [autoReconnect,setAutoReconnect]=useState(true);
   const [standby,setStandby]=useState(true);
   const [bitrate,setBitrate]=useState(4500);
@@ -803,32 +962,59 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl}:{
   const [egressStatus,setEgressStatus]=useState<string>("");
   const [streamError,setStreamError]=useState("");
   const [streamStatus,setStreamStatus]=useState<string>("");
+  const [streamRetries,setStreamRetries]=useState<number|string|null>(null);
+  const [streamDuration,setStreamDuration]=useState<number|string|null>(null);
   const [starting,setStarting]=useState(false);
   useEffect(()=>{try{const s=localStorage.getItem("dtv-rtmp-server"),k=localStorage.getItem("dtv-stream-key"),b=localStorage.getItem("dtv-bitrate"),f=localStorage.getItem("dtv-fps"),q=localStorage.getItem("dtv-resolution"),e=localStorage.getItem("dtv-facebook-egress-id");if(s)setRtmpServer(s);if(k)setStreamKey(k);if(b)setBitrate(Number(b));if(f)setFps(Number(f));if(q)setResolution(q);if(e)setEgressId(e)}catch{}},[]);
   useEffect(()=>{try{localStorage.setItem("dtv-rtmp-server",rtmpServer);localStorage.setItem("dtv-stream-key",streamKey);localStorage.setItem("dtv-bitrate",String(bitrate));localStorage.setItem("dtv-fps",String(fps));localStorage.setItem("dtv-resolution",resolution);if(egressId)localStorage.setItem("dtv-facebook-egress-id",egressId);else localStorage.removeItem("dtv-facebook-egress-id")}catch{}},[rtmpServer,streamKey,bitrate,fps,resolution,egressId]);
   useEffect(()=>{if(!live){setHealth("Stable");return}const id=window.setInterval(()=>setHealth(navigator.onLine?"Stable":"Warning"),3000);return()=>window.clearInterval(id)},[live]);
-  useEffect(()=>{if(!egressId){setEgressStatus("");setStreamError("");setStreamStatus("");return}let cancelled=false;const check=async()=>{try{const r=await fetch("/api/stream/status?egressId="+encodeURIComponent(egressId),{cache:"no-store"});const d=await r.json();if(cancelled)return;if(!r.ok||!d.ok){setStreamError(d.error||"Unable to read cloud egress status.");return}setEgressStatus(d.status||"");setStreamStatus(d.streamStatus||"");const failure=d.streamError||d.error||"";setStreamError(failure);if(d.status==="EGRESS_FAILED"||d.status==="EGRESS_ABORTED"||d.status==="EGRESS_COMPLETE"){if(failure)setError(failure);}}catch(e:any){if(!cancelled)setStreamError(e?.message||"Status check failed.")}};check();const id=window.setInterval(check,3000);return()=>{cancelled=true;window.clearInterval(id)}},[egressId]);
+  useEffect(()=>{if(!egressId){setEgressStatus("");setStreamError("");setStreamStatus("");setStreamRetries(null);setStreamDuration(null);return}let cancelled=false;const check=async()=>{try{const r=await fetch("/api/stream/status?egressId="+encodeURIComponent(egressId),{cache:"no-store"});const d=await r.json();if(cancelled)return;if(!r.ok||!d.ok){setStreamError(d.error||"Unable to read cloud egress status.");return}setEgressStatus(d.status||"");setStreamStatus(d.streamStatus||"");setStreamRetries(d.retries??null);setStreamDuration(d.duration??null);const failure=d.streamError||d.error||"";setStreamError(failure);if(d.status==="EGRESS_FAILED"||d.status==="EGRESS_ABORTED"||d.status==="EGRESS_COMPLETE"){if(failure)setError(failure);}}catch(e:any){if(!cancelled)setStreamError(e?.message||"Status check failed.")}};check();const id=window.setInterval(check,3000);return()=>{cancelled=true;window.clearInterval(id)}},[egressId]);
   const saveRtmp=()=>{setError("");setMessage("");if(!rtmpServer.trim()||!streamKey.trim()){setError("Enter both the Facebook Server URL and Stream Key.");return}if(!/^rtmps?:\/\//i.test(rtmpServer.trim())){setError("Server URL must start with rtmp:// or rtmps://.");return}setConnected({...connected,Facebook:true});setMessage("Facebook destination saved. The next button starts a REAL cloud RTMPS egress.")};
-  const startFacebook=async()=>{setError("");setMessage("");setStreamError("");setEgressStatus("");if(starting)return;if(!rtmpServer.trim()||!streamKey.trim()){setError("Enter the Facebook Server URL and Stream Key first.");return}if(programWebUrl){setError("The selected Program is a Web/YouTube source. Select an uploaded MP4/MOV/WebM from Media first; the cloud encoder needs a public media URL.");return}const sourceUrl=program?.url||"";if(!/^https?:\/\//i.test(sourceUrl)){setError("Select an uploaded cloud video first. A browser-only blob/local file cannot be sent to the cloud encoder.");return}try{setStarting(true);const r=await fetch("/api/stream/start",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({server:rtmpServer.trim(),key:streamKey.trim(),sourceUrl,name:program?.name||"CHEMCHEM TV KENYA — PROGRAM",resolution,bitrate,fps})});const d=await r.json();if(!r.ok||!d.ok){setError(d.error||"Cloud Facebook stream could not be started.");return}setEgressId(d.egressId||"");setEgressStatus(d.status||"EGRESS_STARTING");setConnected({...connected,Facebook:true});setMessage("Cloud egress accepted by LiveKit. Waiting for the actual stream pipeline status…")}catch(e:any){setError(e?.message||"Network error while starting the cloud stream.")}finally{setStarting(false)}};
+  const startFacebook=async()=>{
+    setError("");setMessage("");setStreamError("");setEgressStatus("");setStreamStatus("");setStreamRetries(null);setStreamDuration(null);
+    if(starting)return;
+    if(!rtmpServer.trim()||!streamKey.trim()){setError("Enter the Facebook Server URL and Stream Key first.");return}
+    if(livekitStatus!=="CONNECTED"){setError("Director → LiveKit is not connected yet. Wait for LiveKit CONNECTED before starting Facebook.");return}
+    try{
+      setStarting(true);
+      const response=await fetch("/api/stream/start",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          server:rtmpServer.trim(),
+          key:streamKey.trim(),
+          name:"CHEMCHEM TV KENYA — PROGRAM / LIVE OUTPUT",
+          resolution,bitrate,fps
+        })
+      });
+      const d=await response.json();
+      if(!response.ok||!d.ok){setError(d.error||"Cloud Facebook stream could not be started.");return}
+      setEgressId(d.egressId||"");
+      setEgressStatus(d.status||"EGRESS_STARTING");
+      setConnected({...connected,Facebook:true});
+      setMessage("Cloud egress is now capturing PROGRAM / LIVE OUTPUT, not a raw uploaded file. Waiting for the real RTMP output status…");
+    }catch(e:any){setError(e?.message||"Network error while starting the cloud stream.")}
+    finally{setStarting(false)}
+  };
   const stopFacebook=async()=>{setError("");setMessage("");if(!egressId){setMessage("No active cloud egress ID is stored in this browser.");return}try{const r=await fetch("/api/stream/stop",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({egressId})});const d=await r.json();if(!r.ok||!d.ok){setError(d.error||"Cloud stream could not be stopped.");return}setEgressId("");setEgressStatus("");setStreamError("");setStreamStatus("");setMessage("Facebook cloud stream stopped.")}catch(e:any){setError(e?.message||"Network error while stopping the stream.")}};
-  const clearDestination=()=>{setRtmpServer("rtmps://live-api.facebook.com:443/rtmp/");setStreamKey("");setConnected({...connected,Facebook:false});setEgressId("");setEgressStatus("");setStreamError("");setStreamStatus("");setMessage("Facebook RTMPS destination cleared.");setError("")};
+  const clearDestination=()=>{setRtmpServer("rtmps://live-api.facebook.com:443/rtmp/");setStreamKey("");setConnected({...connected,Facebook:false});setEgressId("");setEgressStatus("");setStreamError("");setStreamStatus("");setStreamRetries(null);setStreamDuration(null);setMessage("Facebook RTMPS destination cleared.");setError("")};
   return <div className="two"><div className="panel"><div className="title"><b>STREAMING OUTPUTS</b><em>{egressId?"CLOUD EGRESS ACTIVE":live?"PROGRAM READY":"STANDBY"}</em></div>
     <div className="panel"><div className="title"><b>FACEBOOK RTMPS</b><em>{egressId?"LIVE PIPELINE":connected.Facebook?"CONFIGURED":"READY"}</em></div>
-      <p className="muted">Real server-side path: CHEMCHEM Program → LiveKit Cloud Egress → Facebook RTMPS. The browser is no longer the Facebook encoder and the Android encoder is not required for this Facebook test.</p>
+      <p className="muted">REAL path: Director PROGRAM / LIVE OUTPUT → LiveKit Room → Cloud Egress → Facebook RTMPS. Images, videos, camera, screen share, news and graphics are broadcast as the composed live output.</p>
       <label>Facebook Server URL<input value={rtmpServer} onChange={e=>setRtmpServer(e.target.value)} placeholder="rtmps://live-api.facebook.com:443/rtmp/"/></label>
       <label>Facebook Stream Key<input type={showKey?"text":"password"} value={streamKey} onChange={e=>setStreamKey(e.target.value)} placeholder="Paste the current Facebook stream key"/></label>
       <label><input type="checkbox" checked={showKey} onChange={e=>setShowKey(e.target.checked)}/> Show stream key</label>
-      <div className="buttons"><button className={connected.Facebook?"connectedButton":""} onClick={saveRtmp}>{connected.Facebook?"✓ FACEBOOK DESTINATION SAVED":"SAVE FACEBOOK RTMPS"}</button><button onClick={clearDestination}>CLEAR</button></div>
+      <div className="buttons"><button className={connected.Facebook?"connectedButton":""} onClick={saveRtmp}>{connected.Facebook?"✓ FACEBOOK DESTINATION SAVED":"SAVE FACEBOOK RTMPS"}</button><button onClick={clearDestination}>CLEAR</button><button onClick={()=>window.open("/output","_blank","noopener,noreferrer")}>↗ OPEN LIVE OUTPUT</button></div>
       {message&&<p className="muted">✓ {message}</p>}{egressStatus&&<p className="muted">LiveKit egress: <b>{egressStatus}</b>{streamStatus&&<> · RTMP output: <b>{streamStatus}</b></>}</p>}{streamError&&<p style={{color:"#ff6b78"}}>⚠ LiveKit stream error: {streamError}</p>}{error&&<p style={{color:"#ff6b78"}}>⚠ {error}</p>}
     </div>
     <div className="streamControls" style={{marginTop:12}}><label>Resolution <select value={resolution} onChange={e=>setResolution(e.target.value)}><option>1920x1080</option><option>1280x720</option></select></label><label>Frame rate <select value={fps} onChange={e=>setFps(Number(e.target.value))}><option value={30}>30 FPS</option><option value={25}>25 FPS</option><option value={60}>60 FPS</option></select></label><label>Target bitrate <input type="range" min="1500" max="9000" step="500" value={bitrate} onChange={e=>setBitrate(Number(e.target.value))}/><b>{bitrate} kbps</b></label><label><input type="checkbox" checked={autoReconnect} onChange={e=>setAutoReconnect(e.target.checked)}/> Automatic reconnect</label><label><input type="checkbox" checked={standby} onChange={e=>setStandby(e.target.checked)}/> Standby fallback</label></div>
-    <div className="panel" style={{marginTop:12}}><div className="title"><b>REAL CLOUD BROADCAST ENGINE</b><em>{egressId?"STREAMING":"READY"}</em></div><p className="muted">LiveKit Egress renders the public Program Output page in a cloud browser and sends the encoded result to Facebook RTMPS.</p><div className="health"><span>PREVIEW</span><b>{preview?.name||"STANDBY"}</b></div><div className="health"><span>PROGRAM TO STREAM</span><b>{programWebUrl?"WEB / YOUTUBE":program?.name||"STANDBY"}</b></div><div className="health"><span>FACEBOOK</span><b>{egressId?"CLOUD EGRESS ACTIVE":connected.Facebook?"DESTINATION SAVED":"NOT CONFIGURED"}</b></div><div className="buttons">{!egressId?<button onClick={startFacebook} className="big">{starting?"STARTING CLOUD ENCODER…":"● START REAL FACEBOOK STREAM"}</button>:<button onClick={stopFacebook} className="big">■ STOP FACEBOOK STREAM</button>}</div></div>
-  </div><div className="panel"><div className="title"><b>FACEBOOK DELIVERY STATUS</b></div><p>✓ Program source · {programWebUrl?"WEB / YOUTUBE":program?.name||"STANDBY"}</p><p>✓ Facebook RTMPS · {connected.Facebook?"CONFIGURED":"NOT CONFIGURED"}</p><p>✓ Cloud encoder · {egressId?"ACTIVE":"OFFLINE"}</p><p>✓ Automatic reconnect · {autoReconnect?"ON":"OFF"}</p><p>✓ Internet-loss detection · {health}</p><p>✓ Standby fallback · {standby?"ON":"OFF"}</p><p>✓ Target · {resolution} · {fps} FPS · {bitrate} kbps</p><div className="health"><span>RTMP delivery</span><b>{egressStatus==="EGRESS_ACTIVE"?"LIVEKIT → FACEBOOK":egressId?egressStatus.replace("EGRESS_",""):"OFFLINE"}</b></div><p className="muted">The cloud egress ID represents the actual server-side streaming job. Facebook Live Producer should show an incoming preview after the job starts.</p><p className="muted">First test: upload a direct MP4 to Media, select it as Program, paste the current Facebook Server URL and Stream Key, then press START REAL FACEBOOK STREAM.</p></div></div>
+    <div className="panel" style={{marginTop:12}}><div className="title"><b>REAL CLOUD BROADCAST ENGINE</b><em>{egressId?"STREAMING":"READY"}</em></div><p className="muted">LiveKit Egress renders the public Program Output page in a cloud browser and sends the encoded result to Facebook RTMPS.</p><div className="health"><span>PREVIEW</span><b>{preview?.name||"STANDBY"}</b></div><div className="health"><span>DIRECTOR → LIVEKIT</span><b>{livekitStatus}</b></div><div className="health"><span>PROGRAM TO STREAM</span><b>PROGRAM / LIVE OUTPUT</b></div><div className="health"><span>FACEBOOK</span><b>{egressId?"CLOUD EGRESS ACTIVE":connected.Facebook?"DESTINATION SAVED":"NOT CONFIGURED"}</b></div><div className="buttons">{!egressId?<button onClick={startFacebook} className="big">{starting?"STARTING CLOUD ENCODER…":"● START REAL FACEBOOK STREAM"}</button>:<button onClick={stopFacebook} className="big">■ STOP FACEBOOK STREAM</button>}</div></div>
+  </div><div className="panel"><div className="title"><b>FACEBOOK DELIVERY STATUS</b></div><p>✓ Program source · {programWebUrl?"WEB / YOUTUBE":program?.name||"STANDBY"}</p><p>✓ Facebook RTMPS · {connected.Facebook?"CONFIGURED":"NOT CONFIGURED"}</p><p>✓ Cloud encoder · {egressId?"ACTIVE":"OFFLINE"}</p><p>✓ Automatic reconnect · {autoReconnect?"ON":"OFF"}</p><p>✓ Internet-loss detection · {health}</p><p>✓ Standby fallback · {standby?"ON":"OFF"}</p><p>✓ Director → LiveKit · {livekitStatus}</p><p>✓ Target bitrate · {bitrate} kbps · {resolution} · {fps} FPS</p><p>✓ RTMP output · {streamStatus||"WAITING"}</p><p>✓ Retries · {streamRetries??"—"}</p><p>✓ RTMP duration · {streamDuration??"—"}</p><p>✓ Facebook delivered kbps · Not exposed by LiveKit Egress telemetry</p><div className="health"><span>RTMP delivery</span><b>{streamStatus==="ACTIVE"?"LIVEKIT → FACEBOOK":streamStatus||"OFFLINE"}</b></div><p className="muted">The egress and RTMP output values above are live server telemetry. The configured target bitrate is real, while Facebook-side delivered kbps is not exposed by the current LiveKit Egress API and is never fabricated.</p><p className="muted">Test with either an image or a video. Set the desired composition in PROGRAM, paste the current Facebook Server URL and Stream Key, then start the real Facebook stream.</p></div></div>
 }
 function Analytics({live,program,streamStartedAt,totalViews,peakViewers,connected}:{live:boolean;program:MediaFile|null;streamStartedAt:number|null;totalViews:number;peakViewers:number;connected:Record<string,boolean>}){
   const [now,setNow]=useState(Date.now());
   useEffect(()=>{const id=window.setInterval(()=>setNow(Date.now()),1000);return()=>window.clearInterval(id)},[]);
-  const duration=streamStartedAt?Math.max(0,Math.floor((now-streamStartedAt)/1000)):0;const fmt=(s:number)=>String(Math.floor(s/3600)).padStart(2,"0")+":"+String(Math.floor(s%3600/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");const outputs=Object.values(connected).filter(Boolean).length;return <div><div className="cards">{[["Live Viewers",live?"1":"0"],["Total Views",String(totalViews)],["Program",program?.name||"Standby"],["Followers","—"],["Peak Viewers",String(peakViewers)],["Health",live?"Stable":"Standby"],["Stream Time",fmt(duration)],["Outputs",String(outputs)]].map(x=><div className="metric" key={x[0]}><small>{x[0]}</small><strong>{x[1]}</strong><span>{live?"Live now":"Today"}</span></div>)}</div><div className="panel" style={{marginTop:12}}><div className="title"><b>OUTPUT HEALTH</b></div>{Object.entries(connected).map(([name,on])=><div className="health" key={name}><span>{name}</span><b>{on?(live?"LIVE":"READY"):"OFFLINE"}</b></div>)}</div></div>
+  const duration=streamStartedAt?Math.max(0,Math.floor((now-streamStartedAt)/1000)):0;const fmt=(s:number)=>String(Math.floor(s/3600)).padStart(2,"0")+":"+String(Math.floor(s%3600/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");const outputs=Object.values(connected).filter(Boolean).length;return <div><div className="cards">{[["Live Viewers","—"],["Total Views","—"],["Program",program?.name||"Program / LIVE OUTPUT"],["Followers","—"],["Peak Viewers","—"],["Health",live?"PROGRAM LIVE":"Standby"],["Stream Time",fmt(duration)],["Outputs",String(outputs)]].map(x=><div className="metric" key={x[0]}><small>{x[0]}</small><strong>{x[1]}</strong><span>{live?"Live now":"Today"}</span></div>)}</div><div className="panel" style={{marginTop:12}}><div className="title"><b>OUTPUT HEALTH</b></div>{Object.entries(connected).map(([name,on])=><div className="health" key={name}><span>{name}</span><b>{on?(live?"LIVE":"READY"):"OFFLINE"}</b></div>)}</div></div>
 }
 
 function Settings({notify}:{notify:(x:string)=>void}){

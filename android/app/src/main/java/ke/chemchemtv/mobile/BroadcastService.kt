@@ -135,7 +135,7 @@ class BroadcastService : Service(), ConnectChecker {
     stream = null
     try { projection?.stop() } catch (_:Exception) {}
     projection = null
-    stopForeground(STOP_FOREGROUND_REMOVE)
+    stopForeground(true)
     sendStatus("STOPPED","Facebook connection closed and encoder released.")
     stopSelf()
   }

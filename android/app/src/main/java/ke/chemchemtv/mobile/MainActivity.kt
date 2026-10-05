@@ -471,7 +471,7 @@ class MainActivity : AppCompatActivity() {
     if(!cameraSelected && (m==null || (!m.type.startsWith("video/") && !m.type.startsWith("image/")))){
       notify("Select a video/image or open Camera first");return
     }
-    val server=if(::serverInput.isInitialized)serverInput.text.toString().trim() else "rtmps://live-api.s-facebook.com:443/rtmp/"
+    val server=if(::serverInput.isInitialized)serverInput.text.toString().trim() else "rtmps://live-api.facebook.com:443/rtmp/"
     val key=if(::keyInput.isInitialized)keyInput.text.toString().trim() else ""
     if(server.isBlank()||key.isBlank()){notify("Enter Facebook Stream Key");return}
     val endpoint=server.trimEnd('/')+"/"+key.trimStart('/')

@@ -86,7 +86,7 @@ function boxStyle(layer: OutputLayer) {
   };
 }
 
-export default function OutputClient({ name }: { name: string }) {
+export default function OutputClient({ name, monitor = false }: { name: string; monitor?: boolean }) {
   const [state, setState] = useState<ProgramState | null>(null);
   const [status, setStatus] = useState("CONNECTING");
   const [remoteCamera, setRemoteCamera] = useState<MediaStreamTrack | null>(null);
@@ -194,7 +194,7 @@ export default function OutputClient({ name }: { name: string }) {
     if (!audioRef.current) return;
     audioRef.current.srcObject = remoteAudio ? new MediaStream([remoteAudio]) : null;
     audioRef.current.volume = state?.volume ?? 1;
-    audioRef.current.muted = !!state?.muted || (state?.source !== "camera" && state?.source !== "screen");
+    audioRef.current.muted = monitor || !!state?.muted || (state?.source !== "camera" && state?.source !== "screen");
     if (remoteAudio) audioRef.current.play().catch(() => {});
   }, [remoteAudio, state?.volume, state?.muted, state?.source]);
 
@@ -212,8 +212,8 @@ export default function OutputClient({ name }: { name: string }) {
     const video = document.getElementById("chemchem-output-base-video") as HTMLVideoElement | null;
     if (!video || !state || !isVideo(state.media)) return;
 
-    video.volume = state.muted ? 0 : Math.max(0, Math.min(1, state.volume));
-    video.muted = !!state.muted;
+    video.volume = monitor ? 0 : (state.muted ? 0 : Math.max(0, Math.min(1, state.volume)));
+    video.muted = monitor || !!state.muted;
 
     const key = (state.media?.url || "") + "|" + (state.playing ? "1" : "0");
     if (renderedMediaKeyRef.current !== key) {
@@ -245,7 +245,7 @@ export default function OutputClient({ name }: { name: string }) {
           autoPlay
           loop
           playsInline
-          muted={!!state?.muted}
+          muted={monitor || !!state?.muted}
           controls={false}
           preload="auto"
           style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }}

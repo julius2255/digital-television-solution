@@ -318,7 +318,7 @@ class MainActivity : AppCompatActivity() {
       val ok=cameraPreviewStream!!.prepareVideo(1280,720,2500000,30) && cameraPreviewStream!!.prepareAudio(44100,true,128000)
       if(!ok) throw IllegalStateException("Camera preview preparation failed")
       cameraPreviewStream!!.startPreview(cameraTexture)
-      status.text="CAMERA • "+if(cameraFront)"FRONT":"BACK"+" • PREVIEW"
+      status.text="CAMERA • "+(if(cameraFront)"FRONT" else "BACK")+" • PREVIEW"
       notify("Camera preview is running")
     }catch(e:Exception){stopCameraPreview();notify("Camera error: "+(e.message?:"unable to open camera"))}
   }

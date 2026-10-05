@@ -732,7 +732,7 @@ function Studio(p:{
     if(!media)return <div key={l.id} {...common}><span className="missingLayer">Media missing</span></div>;
     const node=l.kind==="image"?<img style={mediaStyle} src={media.url} alt={media.name}/>:<video style={mediaStyle}
       ref={l.id==="base"?(program?programRef:previewRef):undefined}
-      src={media.url} muted={!program||l.id!=="base"||p.muted} autoPlay={program?p.programPlaying:p.previewPlaying} loop={l.id!=="base"} playsInline preload="auto"
+      src={media.url} muted={true} autoPlay={program?p.programPlaying:p.previewPlaying} loop={l.id!=="base"} playsInline preload="auto"
       onTimeUpdate={l.id==="base"?(e=>{if(program){setProgramClock(e.currentTarget.currentTime);p.setProgramPosition(e.currentTarget.currentTime)}else setPreviewClock(e.currentTarget.currentTime)}):undefined}
       onLoadedMetadata={l.id==="base"?(e=>{e.currentTarget.currentTime=program?p.programTime:p.previewTime}):undefined}
       onEnded={l.id==="base"?(e=>{if(program)p.onProgramEnded?.();else p.stopPreview()}):undefined}
@@ -746,7 +746,7 @@ function Studio(p:{
   const screenActive=p.activeSource==="screen"&&!!p.screenStream; const newsActive=program&&p.activeSource==="news"&&!!p.newsOnAir;
     return <div className={"composition "+(program&&fadePulse?"programFade":"")} style={program?{"--fade-duration":p.fadeSpeed+"ms"} as React.CSSProperties:undefined} ref={!program?editorRef:null}>
       {!base&&!program&&cameraActive&&<video ref={previewCameraRef} className="compositionCamera" autoPlay muted playsInline/>}{!base&&!program&&screenActive&&<video ref={previewScreenRef} className="compositionCamera" autoPlay muted playsInline/>}{!base&&!program&&p.previewWebUrl&&<iframe ref={previewWebRef} className="compositionWeb" src={p.previewWebUrl} title="Preview Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
-      {!base&&program&&cameraActive&&<video ref={programCameraRef} className="compositionCamera" autoPlay muted={!p.programPlaying||p.muted} playsInline/>}{!base&&program&&screenActive&&<video ref={programScreenRef} className="compositionCamera" autoPlay muted={!p.programPlaying||p.muted} playsInline/>}{!base&&program&&p.programWebUrl&&<iframe ref={programWebRef} className="compositionWeb" src={p.programWebUrl} title="Program Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
+      {!base&&program&&cameraActive&&<video ref={programCameraRef} className="compositionCamera" autoPlay muted={true} playsInline/>}{!base&&program&&screenActive&&<video ref={programScreenRef} className="compositionCamera" autoPlay muted={!p.programPlaying||p.muted} playsInline/>}{!base&&program&&p.programWebUrl&&<iframe ref={programWebRef} className="compositionWeb" src={p.programWebUrl} title="Program Web Source" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
       {newsActive&&<div className="compositionNews" style={{position:"absolute",inset:0,background:"#07111f",color:"#fff",overflow:"hidden",fontFamily:"Arial,sans-serif"}}>
         {p.newsOnAir?.image&&<img src={p.newsOnAir.image} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:.42}}/>}
         <div style={{position:"absolute",inset:0,background:"linear-gradient(90deg,rgba(3,12,25,.97) 0%,rgba(3,12,25,.82) 55%,rgba(3,12,25,.3) 100%)"}}/>

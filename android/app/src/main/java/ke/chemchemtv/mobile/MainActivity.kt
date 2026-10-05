@@ -83,6 +83,47 @@ class MainActivity : AppCompatActivity() {
     ContextCompat.registerReceiver(this, statusReceiver, IntentFilter(EncoderService.ACTION_STATUS), ContextCompat.RECEIVER_NOT_EXPORTED)
     buildShell()
     showStudio()
+    handleConnectorIntent(intent)
+  }
+
+  override fun onNewIntent(intent: Intent?) {
+    super.onNewIntent(intent)
+    if (intent != null) handleConnectorIntent(intent)
+  }
+
+  private fun handleConnectorIntent(intent: Intent) {
+    if (intent.action != Intent.ACTION_VIEW) return
+    val uri = intent.data ?: return
+    if (uri.scheme != "chemchemtv" || uri.host != "encoder") return
+    if (uri.getQueryParameter("action") == "stop") {
+      stopService(Intent(this, EncoderService::class.java).setAction(EncoderService.ACTION_STOP))
+      status.text = "STOPPED • FACEBOOK DISCONNECTED"
+      return
+    }
+    val server = uri.getQueryParameter("server").orEmpty()
+    val key = uri.getQueryParameter("key").orEmpty()
+    val output = uri.getQueryParameter("output").orEmpty()
+    val base = uri.getQueryParameter("base").orEmpty()
+    val session = uri.getQueryParameter("session").orEmpty()
+    if (server.isBlank() || key.isBlank() || output.isBlank() || base.isBlank()) {
+      status.text = "ERROR • Connector setup is incomplete"
+      return
+    }
+    prefs.edit().putString("fb_server", server).putString("fb_key", key).putString("website_base_url", base).putString("program_output_url", output).apply()
+    val endpoint = server.trimEnd('/') + "/" + key.trimStart('/')
+    val i = Intent(this, EncoderService::class.java).apply {
+      action = EncoderService.ACTION_START
+      putExtra(EncoderService.EXTRA_ENDPOINT, endpoint)
+      putExtra(EncoderService.EXTRA_OUTPUT_URL, output)
+      putExtra(EncoderService.EXTRA_BASE_URL, base)
+      putExtra(EncoderService.EXTRA_SESSION, session)
+    }
+    try {
+      ContextCompat.startForegroundService(this, i)
+      status.text = "CONNECTING • FACEBOOK RTMPS"
+    } catch (e: Exception) {
+      status.text = "ERROR • " + (e.message ?: "Unable to start connector")
+    }
   }
 
   private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -481,21 +522,21 @@ class MainActivity : AppCompatActivity() {
       stopService(Intent(this,EncoderService::class.java).setAction(EncoderService.ACTION_STOP))
       live=false;goLive.text="● GO LIVE";status.text="STOPPED";notify("Broadcast stopped");return
     }
-    val cameraSelected = cameraPreviewStream != null
-    val m=program ?: selected
-    if(!cameraSelected && (m==null || (!m.type.startsWith("video/") && !m.type.startsWith("image/")))){
-      notify("Select a video/image or open Camera first");return
-    }
     val server=if(::serverInput.isInitialized)serverInput.text.toString().trim() else "rtmps://live-api.facebook.com:443/rtmp/"
     val key=if(::keyInput.isInitialized)keyInput.text.toString().trim() else ""
     if(server.isBlank()||key.isBlank()){notify("Enter Facebook Stream Key");return}
     val endpoint=server.trimEnd('/')+"/"+key.trimStart('/')
-    if(cameraSelected) stopCameraPreview()
+    val base=prefs.getString("website_base_url","").orEmpty()
+    val output=prefs.getString("program_output_url","").orEmpty()
+    if(base.isBlank() || output.isBlank()){
+      notify("Open the Facebook Connector from the CHEMCHEM website first");return
+    }
     val i=Intent(this,EncoderService::class.java).apply{
       action=EncoderService.ACTION_START
       putExtra(EncoderService.EXTRA_ENDPOINT,endpoint)
-      putExtra(EncoderService.EXTRA_MEDIA_URL,if(cameraSelected) "" else m!!.uri.toString())
-      putExtra(EncoderService.EXTRA_KIND,if(cameraSelected) "CAMERA" else if(m!!.type.startsWith("image/")) "IMAGE" else "VIDEO")
+      putExtra(EncoderService.EXTRA_OUTPUT_URL,output)
+      putExtra(EncoderService.EXTRA_BASE_URL,base)
+      putExtra(EncoderService.EXTRA_SESSION,System.currentTimeMillis().toString())
     }
     try{ContextCompat.startForegroundService(this,i);status.text="CONNECTING • FACEBOOK RTMPS";goLive.text="CONNECTING..."}catch(e:Exception){notify("Encoder error: "+(e.message ?: "start failed"))}
   }

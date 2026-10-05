@@ -24,7 +24,7 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Install Gradle 9.0
+      - name: Install Gradle 9.1
         working-directory: .
         run: |
           curl -fsSL https://services.gradle.org/distributions/gradle-9.1.0-bin.zip -o /tmp/gradle.zip

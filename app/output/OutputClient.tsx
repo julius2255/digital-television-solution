@@ -209,17 +209,6 @@ export default function OutputClient({ name }: { name: string }) {
   }, []);
 
   useEffect(() => {
-    // Keep a real silent audio track in the browser output for image/graphic
-    // programs. This prevents a still-image program from becoming a video-only
-    // RTMP stream. It is deliberately silent and does not replace Program audio.
-    const audio = silenceRef.current;
-    if (!audio) return;
-    audio.volume = 1;
-    audio.muted = false;
-    audio.play().catch(() => {});
-  }, []);
-
-  useEffect(() => {
     const video = document.getElementById("chemchem-output-base-video") as HTMLVideoElement | null;
     if (!video || !state || !isVideo(state.media)) return;
 

@@ -64,13 +64,14 @@ class EncoderService : Service(), ConnectChecker {
       ACTION_START -> {
         val endpoint = intent.getStringExtra(EXTRA_ENDPOINT).orEmpty()
         val mediaUrl = intent.getStringExtra(EXTRA_MEDIA_URL).orEmpty()
+        val kind = intent.getStringExtra(EXTRA_KIND).orEmpty()
 
-        if (endpoint.isBlank() || mediaUrl.isBlank()) {
+        if (endpoint.isBlank() || (mediaUrl.isBlank() && kind != "CAMERA")) {
           sendStatus("ERROR: Facebook RTMPS or Program media is missing")
           stopSelf()
         } else {
           promoteToForeground()
-          startEncoder(endpoint, mediaUrl)
+          if (kind == "CAMERA") startCameraEncoder(endpoint) else startEncoder(endpoint, mediaUrl)
         }
       }
     }
@@ -105,7 +106,7 @@ class EncoderService : Service(), ConnectChecker {
         val newStream: GenericStream
 
         if (isImage(lower)) {
-          val bitmap = URL(mediaUrl).openStream().use { BitmapFactory.decodeStream(it) }
+          val bitmap = applicationContext.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
             ?: throw IllegalStateException("Could not download Program image")
           newStream = GenericStream(
             applicationContext,
@@ -172,6 +173,33 @@ class EncoderService : Service(), ConnectChecker {
       } catch (e: Exception) {
         starting = false
         sendStatus("ERROR: " + (e.message ?: "native encoder failed"))
+        stopEncoder()
+        stopSelf()
+      }
+    }.start()
+  }
+
+  private fun startCameraEncoder(endpoint: String) {
+    if (starting || stream?.isStreaming == true) return
+    starting = true
+    stopEncoder()
+    Thread {
+      try {
+        val newStream = GenericStream(applicationContext, this)
+        val videoReady = newStream.prepareVideo(1280, 720, 3500 * 1000, fps = 30, rotation = 0)
+        val audioReady = newStream.prepareAudio(44100, true, 128 * 1000, false, false)
+        if (!videoReady || !audioReady) {
+          newStream.release()
+          throw IllegalStateException("Camera H.264/AAC preparation failed")
+        }
+        stream = newStream
+        sendStatus("CAMERA READY • H.264 720P + AAC")
+        sendStatus("CONNECTING • FACEBOOK RTMPS")
+        updateNotification("CHEMCHEM TV KENYA • CAMERA CONNECTING")
+        newStream.startStream(endpoint)
+      } catch (e: Exception) {
+        starting = false
+        sendStatus("ERROR: " + (e.message ?: "camera encoder failed"))
         stopEncoder()
         stopSelf()
       }

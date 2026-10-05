@@ -840,6 +840,7 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl}:{
       program:program?.name||"Standby",
       source:programWebUrl?"Web/YouTube":program?"Media":"Standby",
       webUrl:outputUrl,
+      mediaUrl:rawProgramUrl.startsWith("http://")||rawProgramUrl.startsWith("https://")?rawProgramUrl:"",
       preview:preview?.name||""
     });
     const deepLink="chemchemtv://encoder?"+params.toString();

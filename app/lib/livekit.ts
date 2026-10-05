@@ -28,7 +28,7 @@ export function createLiveKitToken(
   apiKey: string,
   apiSecret: string,
   identity: string,
-  role: "director" | "viewer"
+  role: "director" | "viewer" | "connector"
 ) {
   return sign(apiKey, apiSecret, identity, {
     room: LIVEKIT_ROOM,

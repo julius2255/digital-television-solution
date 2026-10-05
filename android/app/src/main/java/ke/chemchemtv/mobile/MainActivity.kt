@@ -317,7 +317,7 @@ class MainActivity : AppCompatActivity() {
       })
       val ok=cameraPreviewStream!!.prepareVideo(1280,720,2500000,30) && cameraPreviewStream!!.prepareAudio(44100,true,128000)
       if(!ok) throw IllegalStateException("Camera preview preparation failed")
-      cameraPreviewStream!!.startPreview(cameraTexture)
+      cameraPreviewStream!!.startPreview(cameraTexture!!)
       status.text="CAMERA • "+(if(cameraFront)"FRONT" else "BACK")+" • PREVIEW"
       notify("Camera preview is running")
     }catch(e:Exception){stopCameraPreview();notify("Camera error: "+(e.message?:"unable to open camera"))}
@@ -326,7 +326,7 @@ class MainActivity : AppCompatActivity() {
   private fun switchCamera(){
     try {
       val source=cameraPreviewStream?.videoSource
-      if(source is com.pedro.encoder.input.sources.video.Camera2Source){ source.switchCamera(); cameraFront=!cameraFront; status.text="CAMERA • "+if(cameraFront)"FRONT":"BACK"+" • PREVIEW" }
+      if(source is com.pedro.encoder.input.sources.video.Camera2Source){ source.switchCamera(); cameraFront=!cameraFront; status.text="CAMERA • "+(if(cameraFront) "FRONT" else "BACK")+" • PREVIEW" }
       else notify("Camera source is not active")
     } catch(e:Exception){notify("Camera switch failed: "+(e.message?:"unknown error"))}
   }

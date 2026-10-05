@@ -802,12 +802,18 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl}:{
     setError("");setMessage("");
     if(!live){setError("Start CHEMCHEM TV KENYA ON AIR first.");return;}
     if(!connected.Facebook||!rtmpServer.trim()||!streamKey.trim()){setError("Configure Facebook RTMPS with the current Server URL and Stream Key first.");return;}
+    const rawProgramUrl=program?.url||programWebUrl||"";
+    const outputUrl=window.location.origin+"/output?"+new URLSearchParams({
+      name:program?.name||"CHEMCHEM TV KENYA — PROGRAM",
+      src:rawProgramUrl.startsWith("http://")||rawProgramUrl.startsWith("https://")?rawProgramUrl:"",
+      kind:programWebUrl?"WEB / YOUTUBE":program?"MEDIA":"STANDBY"
+    }).toString();
     const params=new URLSearchParams({
       server:rtmpServer.trim(),
       key:streamKey.trim(),
       program:program?.name||"Standby",
       source:programWebUrl?"Web/YouTube":program?"Media":"Standby",
-      webUrl:programWebUrl||"",
+      webUrl:outputUrl,
       preview:preview?.name||""
     });
     const deepLink="chemchemtv://encoder?"+params.toString();

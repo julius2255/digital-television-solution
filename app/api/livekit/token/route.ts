@@ -6,7 +6,8 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.nextUrl.searchParams.get("role") === "director" ? "director" : "viewer";
+    const requestedRole = req.nextUrl.searchParams.get("role");
+    const role = requestedRole === "director" ? "director" : requestedRole === "connector" ? "connector" : "viewer";
     const url = process.env.LIVEKIT_URL || "";
     const apiKey = process.env.LIVEKIT_API_KEY || "";
     const apiSecret = process.env.LIVEKIT_API_SECRET || "";

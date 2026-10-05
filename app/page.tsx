@@ -999,17 +999,86 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl,li
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
   const [egressId,setEgressId]=useState("");
-  const [egressStatus,setEgressStatus]=useState<string>("");
+  const [egressStatus,setEgressStatus]=useState("");
   const [streamError,setStreamError]=useState("");
-  const [streamStatus,setStreamStatus]=useState<string>("");
+  const [streamStatus,setStreamStatus]=useState("");
   const [streamRetries,setStreamRetries]=useState<number|string|null>(null);
   const [streamDuration,setStreamDuration]=useState<number|string|null>(null);
+  const [streamStartedAt,setStreamStartedAt]=useState<number|string|null>(null);
+  const [encoder,setEncoder]=useState<any>(null);
   const [starting,setStarting]=useState(false);
-  useEffect(()=>{try{const s=localStorage.getItem("dtv-rtmp-server"),k=localStorage.getItem("dtv-stream-key"),b=localStorage.getItem("dtv-bitrate"),f=localStorage.getItem("dtv-fps"),q=localStorage.getItem("dtv-resolution"),e=localStorage.getItem("dtv-facebook-egress-id");if(s)setRtmpServer(s);if(k)setStreamKey(k);if(b)setBitrate(Number(b));if(f)setFps(Number(f));if(q)setResolution(q);if(e)setEgressId(e)}catch{}},[]);
-  useEffect(()=>{try{localStorage.setItem("dtv-rtmp-server",rtmpServer);localStorage.setItem("dtv-stream-key",streamKey);localStorage.setItem("dtv-bitrate",String(bitrate));localStorage.setItem("dtv-fps",String(fps));localStorage.setItem("dtv-resolution",resolution);if(egressId)localStorage.setItem("dtv-facebook-egress-id",egressId);else localStorage.removeItem("dtv-facebook-egress-id")}catch{}},[rtmpServer,streamKey,bitrate,fps,resolution,egressId]);
-  useEffect(()=>{if(!live){setHealth("Stable");return}const id=window.setInterval(()=>setHealth(navigator.onLine?"Stable":"Warning"),3000);return()=>window.clearInterval(id)},[live]);
-  useEffect(()=>{if(!egressId){setEgressStatus("");setStreamError("");setStreamStatus("");setStreamRetries(null);setStreamDuration(null);return}let cancelled=false;const check=async()=>{try{const r=await fetch("/api/stream/status?egressId="+encodeURIComponent(egressId),{cache:"no-store"});const d=await r.json();if(cancelled)return;if(!r.ok||!d.ok){setStreamError(d.error||"Unable to read cloud egress status.");return}setEgressStatus(d.status||"");setStreamStatus(d.streamStatus||"");setStreamRetries(d.retries??null);setStreamDuration(d.duration??null);const failure=d.streamError||d.error||"";setStreamError(failure);if(d.status==="EGRESS_FAILED"||d.status==="EGRESS_ABORTED"||d.status==="EGRESS_COMPLETE"){if(failure)setError(failure);}}catch(e:any){if(!cancelled)setStreamError(e?.message||"Status check failed.")}};check();const id=window.setInterval(check,3000);return()=>{cancelled=true;window.clearInterval(id)}},[egressId]);
-  const saveRtmp=()=>{setError("");setMessage("");if(!rtmpServer.trim()||!streamKey.trim()){setError("Enter both the Facebook Server URL and Stream Key.");return}if(!/^rtmps?:\/\//i.test(rtmpServer.trim())){setError("Server URL must start with rtmp:// or rtmps://.");return}setConnected({...connected,Facebook:true});setMessage("Facebook destination saved. The next button starts a REAL cloud RTMPS egress.")};
+
+  useEffect(()=>{
+    try{
+      const s=localStorage.getItem("dtv-rtmp-server"),k=localStorage.getItem("dtv-stream-key"),
+        b=localStorage.getItem("dtv-bitrate"),f=localStorage.getItem("dtv-fps"),q=localStorage.getItem("dtv-resolution"),
+        e=localStorage.getItem("dtv-facebook-egress-id");
+      if(s)setRtmpServer(s);if(k)setStreamKey(k);if(b)setBitrate(Number(b));if(f)setFps(Number(f));if(q)setResolution(q);if(e)setEgressId(e);
+    }catch{}
+  },[]);
+
+  useEffect(()=>{
+    try{
+      localStorage.setItem("dtv-rtmp-server",rtmpServer);
+      localStorage.setItem("dtv-stream-key",streamKey);
+      localStorage.setItem("dtv-bitrate",String(bitrate));
+      localStorage.setItem("dtv-fps",String(fps));
+      localStorage.setItem("dtv-resolution",resolution);
+      if(egressId)localStorage.setItem("dtv-facebook-egress-id",egressId);
+      else localStorage.removeItem("dtv-facebook-egress-id");
+    }catch{}
+  },[rtmpServer,streamKey,bitrate,fps,resolution,egressId]);
+
+  useEffect(()=>{
+    if(!live){setHealth("Stable");return}
+    const id=window.setInterval(()=>setHealth(navigator.onLine?"Stable":"Warning"),3000);
+    return()=>window.clearInterval(id);
+  },[live]);
+
+  useEffect(()=>{
+    if(!egressId){
+      setEgressStatus("");setStreamError("");setStreamStatus("");setStreamRetries(null);setStreamDuration(null);setStreamStartedAt(null);setEncoder(null);
+      return;
+    }
+    let cancelled=false;
+    const check=async()=>{
+      try{
+        const r=await fetch("/api/stream/status?egressId="+encodeURIComponent(egressId),{cache:"no-store"});
+        const d=await r.json();
+        if(cancelled)return;
+        if(!r.ok||!d.ok){setStreamError(d.error||"Unable to read cloud egress status.");return}
+        setEgressStatus(d.status||"");
+        setStreamStatus(d.streamStatus||"");
+        setStreamRetries(d.retries??null);
+        setStreamDuration(d.duration??null);
+        setStreamStartedAt(d.startedAt??null);
+        setEncoder(d.encoder||null);
+        const failure=d.streamError||d.error||"";
+        setStreamError(failure);
+        if(d.status==="EGRESS_FAILED"||d.status==="EGRESS_ABORTED"||d.status==="EGRESS_COMPLETE"){if(failure)setError(failure)}
+      }catch(e:any){if(!cancelled)setStreamError(e?.message||"Status check failed.")}
+    };
+    check();
+    const id=window.setInterval(check,3000);
+    return()=>{cancelled=true;window.clearInterval(id)};
+  },[egressId]);
+
+  const formatDuration=(value:number|string|null)=>{
+    if(value===null||value===undefined||value==="")return "—";
+    const n=Number(value);
+    if(!Number.isFinite(n))return String(value);
+    const seconds=Math.max(0,Math.floor(n>1000000000?n/1000000000:n));
+    return String(Math.floor(seconds/3600)).padStart(2,"0")+":"+String(Math.floor(seconds%3600/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");
+  };
+
+  const saveRtmp=()=>{
+    setError("");setMessage("");
+    if(!rtmpServer.trim()||!streamKey.trim()){setError("Enter both the Facebook Server URL and Stream Key.");return}
+    if(!/^rtmps?:\\/\\//i.test(rtmpServer.trim())){setError("Server URL must start with rtmp:// or rtmps://.");return}
+    setConnected({...connected,Facebook:true});
+    setMessage("Facebook destination saved. Start the real cloud RTMP connection when your Program Output is ready.");
+  };
+
   const startFacebook=async()=>{
     setError("");setMessage("");setStreamError("");setEgressStatus("");setStreamStatus("");setStreamRetries(null);setStreamDuration(null);
     if(starting)return;
@@ -1020,36 +1089,107 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl,li
       const response=await fetch("/api/stream/start",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          server:rtmpServer.trim(),
-          key:streamKey.trim(),
-          name:"CHEMCHEM TV KENYA — PROGRAM / LIVE OUTPUT",
-          resolution,bitrate,fps
-        })
+        body:JSON.stringify({server:rtmpServer.trim(),key:streamKey.trim(),name:"CHEMCHEM TV KENYA — PROGRAM / LIVE OUTPUT",resolution,bitrate,fps})
       });
       const d=await response.json();
       if(!response.ok||!d.ok){setError(d.error||"Cloud Facebook stream could not be started.");return}
       setEgressId(d.egressId||"");
       setEgressStatus(d.status||"EGRESS_STARTING");
+      setEncoder(d.encoder||null);
       setConnected({...connected,Facebook:true});
-      setMessage("Cloud egress is now capturing PROGRAM / LIVE OUTPUT, not a raw uploaded file. Waiting for the real RTMP output status…");
+      setMessage("Cloud egress is capturing the PROGRAM / LIVE OUTPUT composition. It is not streaming the selected library file directly.");
     }catch(e:any){setError(e?.message||"Network error while starting the cloud stream.")}
     finally{setStarting(false)}
   };
-  const stopFacebook=async()=>{setError("");setMessage("");if(!egressId){setMessage("No active cloud egress ID is stored in this browser.");return}try{const r=await fetch("/api/stream/stop",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({egressId})});const d=await r.json();if(!r.ok||!d.ok){setError(d.error||"Cloud stream could not be stopped.");return}setEgressId("");setEgressStatus("");setStreamError("");setStreamStatus("");setMessage("Facebook cloud stream stopped.")}catch(e:any){setError(e?.message||"Network error while stopping the stream.")}};
-  const clearDestination=()=>{setRtmpServer("rtmps://live-api.facebook.com:443/rtmp/");setStreamKey("");setConnected({...connected,Facebook:false});setEgressId("");setEgressStatus("");setStreamError("");setStreamStatus("");setStreamRetries(null);setStreamDuration(null);setMessage("Facebook RTMPS destination cleared.");setError("")};
-  return <div className="two"><div className="panel"><div className="title"><b>STREAMING OUTPUTS</b><em>{egressId?"CLOUD EGRESS ACTIVE":live?"PROGRAM READY":"STANDBY"}</em></div>
-    <div className="panel"><div className="title"><b>FACEBOOK RTMPS</b><em>{egressId?"LIVE PIPELINE":connected.Facebook?"CONFIGURED":"READY"}</em></div>
-      <p className="muted">REAL path: Director PROGRAM / LIVE OUTPUT → LiveKit Room → Cloud Egress → Facebook RTMPS. Images, videos, camera, screen share, news and graphics are broadcast as the composed live output.</p>
-      <label>Facebook Server URL<input value={rtmpServer} onChange={e=>setRtmpServer(e.target.value)} placeholder="rtmps://live-api.facebook.com:443/rtmp/"/></label>
-      <label>Facebook Stream Key<input type={showKey?"text":"password"} value={streamKey} onChange={e=>setStreamKey(e.target.value)} placeholder="Paste the current Facebook stream key"/></label>
-      <label><input type="checkbox" checked={showKey} onChange={e=>setShowKey(e.target.checked)}/> Show stream key</label>
-      <div className="buttons"><button className={connected.Facebook?"connectedButton":""} onClick={saveRtmp}>{connected.Facebook?"✓ FACEBOOK DESTINATION SAVED":"SAVE FACEBOOK RTMPS"}</button><button onClick={clearDestination}>CLEAR</button><button onClick={()=>window.open("/output","_blank","noopener,noreferrer")}>↗ OPEN LIVE OUTPUT</button></div>
-      {message&&<p className="muted">✓ {message}</p>}{egressStatus&&<p className="muted">LiveKit egress: <b>{egressStatus}</b>{streamStatus&&<> · RTMP output: <b>{streamStatus}</b></>}</p>}{streamError&&<p style={{color:"#ff6b78"}}>⚠ LiveKit stream error: {streamError}</p>}{error&&<p style={{color:"#ff6b78"}}>⚠ {error}</p>}
+
+  const stopFacebook=async()=>{
+    setError("");setMessage("");
+    if(!egressId){setMessage("No active cloud egress ID is stored in this browser.");return}
+    try{
+      const r=await fetch("/api/stream/stop",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({egressId})});
+      const d=await r.json();
+      if(!r.ok||!d.ok){setError(d.error||"Cloud stream could not be stopped.");return}
+      setEgressId("");setEgressStatus("");setStreamError("");setStreamStatus("");setMessage("Facebook cloud stream stopped.");
+    }catch(e:any){setError(e?.message||"Network error while stopping the stream.")}
+  };
+
+  const clearDestination=()=>{
+    setRtmpServer("rtmps://live-api.facebook.com:443/rtmp/");
+    setStreamKey("");setConnected({...connected,Facebook:false});setEgressId("");setEgressStatus("");setStreamError("");setStreamStatus("");setStreamRetries(null);setStreamDuration(null);setMessage("Facebook RTMPS destination cleared.");setError("");
+  };
+
+  const monitorUrl="/output?name=CHEMCHEM%20PROGRAM%20OUTPUT&monitor=1&v="+encodeURIComponent(egressId||"standby");
+
+  return <div className="two">
+    <div className="panel">
+      <div className="title"><b>STREAMING OUTPUTS</b><em>{egressId?"CLOUD EGRESS ACTIVE":live?"PROGRAM READY":"STANDBY"}</em></div>
+
+      <div className="panel">
+        <div className="title"><b>PROGRAM OUTPUT MONITOR</b><em>{egressId&&streamStatus==="ACTIVE"?"FACEBOOK PIPELINE LIVE":"DIRECTOR OUTPUT"}</em></div>
+        <div style={{background:"#000",borderRadius:10,overflow:"hidden",border:"1px solid rgba(255,255,255,.12)",aspectRatio:"16/9"}}>
+          <iframe key={monitorUrl} src={monitorUrl} title="CHEMCHEM TV KENYA Program Output" allow="autoplay; encrypted-media; picture-in-picture" style={{width:"100%",height:"100%",border:0,display:"block"}} />
+        </div>
+        <p className="muted">This monitor is the same public Program Output page captured by the cloud encoder. What you see here is what the Facebook egress is instructed to capture: camera, screen, image, video, web source, news and graphics according to the active Program.</p>
+        <div className="health"><span>PROGRAM OUTPUT</span><b>{egressId?"CAPTURED BY CLOUD EGRESS":"READY FOR CAPTURE"}</b></div>
+      </div>
+
+      <div className="panel" style={{marginTop:12}}>
+        <div className="title"><b>FACEBOOK RTMPS</b><em>{egressId?"LIVE PIPELINE":connected.Facebook?"CONFIGURED":"READY"}</em></div>
+        <p className="muted">REAL path: Director Program → LiveKit room → public Program Output → Cloud Egress → Facebook RTMPS. Uploaded media is only one possible source; it is never sent directly unless it is the current Program composition.</p>
+        <label>Facebook Server URL<input value={rtmpServer} onChange={e=>setRtmpServer(e.target.value)} placeholder="rtmps://live-api.facebook.com:443/rtmp/"/></label>
+        <label>Facebook Stream Key<input type={showKey?"text":"password"} value={streamKey} onChange={e=>setStreamKey(e.target.value)} placeholder="Paste the current Facebook stream key"/></label>
+        <label><input type="checkbox" checked={showKey} onChange={e=>setShowKey(e.target.checked)}/> Show stream key</label>
+        <div className="buttons">
+          <button className={connected.Facebook?"connectedButton":""} onClick={saveRtmp}>{connected.Facebook?"✓ FACEBOOK DESTINATION SAVED":"SAVE FACEBOOK RTMPS"}</button>
+          <button onClick={clearDestination}>CLEAR</button>
+          <button onClick={()=>window.open("/output","_blank","noopener,noreferrer")}>↗ OPEN LIVE OUTPUT</button>
+        </div>
+        {message&&<p className="muted">✓ {message}</p>}
+        {egressStatus&&<p className="muted">LiveKit egress: <b>{egressStatus}</b>{streamStatus&&<> · RTMP output: <b>{streamStatus}</b></>}</p>}
+        {streamError&&<p style={{color:"#ff6b78"}}>⚠ LiveKit stream error: {streamError}</p>}
+        {error&&<p style={{color:"#ff6b78"}}>⚠ {error}</p>}
+      </div>
+
+      <div className="streamControls" style={{marginTop:12}}>
+        <label>Resolution <select value={resolution} onChange={e=>setResolution(e.target.value)}><option>1920x1080</option><option>1280x720</option></select></label>
+        <label>Frame rate <select value={fps} onChange={e=>setFps(Number(e.target.value))}><option value={30}>30 FPS</option><option value={25}>25 FPS</option><option value={60}>60 FPS</option></select></label>
+        <label>Encoder video bitrate <input type="range" min="1500" max="9000" step="500" value={bitrate} onChange={e=>setBitrate(Number(e.target.value))}/><b>{bitrate} kbps</b></label>
+        <label><input type="checkbox" checked={autoReconnect} onChange={e=>setAutoReconnect(e.target.checked)}/> Automatic reconnect</label>
+        <label><input type="checkbox" checked={standby} onChange={e=>setStandby(e.target.checked)}/> Standby fallback</label>
+      </div>
+
+      <div className="panel" style={{marginTop:12}}>
+        <div className="title"><b>REAL CLOUD BROADCAST ENGINE</b><em>{egressId?"STREAMING":"READY"}</em></div>
+        <p className="muted">LiveKit Egress renders the public Program Output page in a cloud browser and sends that composed result to Facebook RTMPS.</p>
+        <div className="health"><span>DIRECTOR → LIVEKIT</span><b>{livekitStatus}</b></div>
+        <div className="health"><span>PROGRAM TO STREAM</span><b>PROGRAM / LIVE OUTPUT</b></div>
+        <div className="health"><span>FACEBOOK RTMP</span><b>{streamStatus==="ACTIVE"?"CONNECTED / ACTIVE":streamStatus||"WAITING"}</b></div>
+        <div className="health"><span>ENCODER</span><b>{encoder?((encoder.width||"—")+"×"+(encoder.height||"—")+" · "+(encoder.framerate||"—")+" FPS · "+(encoder.videoBitrateKbps||"—")+" kbps"):bitrate+" kbps target"}</b></div>
+        <div className="health"><span>UPTIME</span><b>{formatDuration(streamDuration)}</b></div>
+        <div className="health"><span>RETRIES</span><b>{streamRetries??"—"}</b></div>
+        <div className="buttons">{!egressId?<button onClick={startFacebook} className="big">{starting?"STARTING CLOUD ENCODER…":"● START REAL FACEBOOK STREAM"}</button>:<button onClick={stopFacebook} className="big">■ STOP FACEBOOK STREAM</button>}</div>
+      </div>
     </div>
-    <div className="streamControls" style={{marginTop:12}}><label>Resolution <select value={resolution} onChange={e=>setResolution(e.target.value)}><option>1920x1080</option><option>1280x720</option></select></label><label>Frame rate <select value={fps} onChange={e=>setFps(Number(e.target.value))}><option value={30}>30 FPS</option><option value={25}>25 FPS</option><option value={60}>60 FPS</option></select></label><label>Target bitrate <input type="range" min="1500" max="9000" step="500" value={bitrate} onChange={e=>setBitrate(Number(e.target.value))}/><b>{bitrate} kbps</b></label><label><input type="checkbox" checked={autoReconnect} onChange={e=>setAutoReconnect(e.target.checked)}/> Automatic reconnect</label><label><input type="checkbox" checked={standby} onChange={e=>setStandby(e.target.checked)}/> Standby fallback</label></div>
-    <div className="panel" style={{marginTop:12}}><div className="title"><b>REAL CLOUD BROADCAST ENGINE</b><em>{egressId?"STREAMING":"READY"}</em></div><p className="muted">LiveKit Egress renders the public Program Output page in a cloud browser and sends the encoded result to Facebook RTMPS.</p><div className="health"><span>PREVIEW</span><b>{preview?.name||"STANDBY"}</b></div><div className="health"><span>DIRECTOR → LIVEKIT</span><b>{livekitStatus}</b></div><div className="health"><span>PROGRAM TO STREAM</span><b>PROGRAM / LIVE OUTPUT</b></div><div className="health"><span>FACEBOOK</span><b>{egressId?"CLOUD EGRESS ACTIVE":connected.Facebook?"DESTINATION SAVED":"NOT CONFIGURED"}</b></div><div className="buttons">{!egressId?<button onClick={startFacebook} className="big">{starting?"STARTING CLOUD ENCODER…":"● START REAL FACEBOOK STREAM"}</button>:<button onClick={stopFacebook} className="big">■ STOP FACEBOOK STREAM</button>}</div></div>
-  </div><div className="panel"><div className="title"><b>FACEBOOK DELIVERY STATUS</b></div><p>✓ Program source · {programWebUrl?"WEB / YOUTUBE":program?.name||"STANDBY"}</p><p>✓ Facebook RTMPS · {connected.Facebook?"CONFIGURED":"NOT CONFIGURED"}</p><p>✓ Cloud encoder · {egressId?"ACTIVE":"OFFLINE"}</p><p>✓ Automatic reconnect · {autoReconnect?"ON":"OFF"}</p><p>✓ Internet-loss detection · {health}</p><p>✓ Standby fallback · {standby?"ON":"OFF"}</p><p>✓ Director → LiveKit · {livekitStatus}</p><p>✓ Target bitrate · {bitrate} kbps · {resolution} · {fps} FPS</p><p>✓ RTMP output · {streamStatus||"WAITING"}</p><p>✓ Retries · {streamRetries??"—"}</p><p>✓ RTMP duration · {streamDuration??"—"}</p><p>✓ Facebook delivered kbps · Not exposed by LiveKit Egress telemetry</p><div className="health"><span>RTMP delivery</span><b>{streamStatus==="ACTIVE"?"LIVEKIT → FACEBOOK":streamStatus||"OFFLINE"}</b></div><p className="muted">The egress and RTMP output values above are live server telemetry. The configured target bitrate is real, while Facebook-side delivered kbps is not exposed by the current LiveKit Egress API and is never fabricated.</p><p className="muted">Test with either an image or a video. Set the desired composition in PROGRAM, paste the current Facebook Server URL and Stream Key, then start the real Facebook stream.</p></div></div>
+
+    <div className="panel">
+      <div className="title"><b>FACEBOOK DELIVERY / TELEMETRY</b></div>
+      <p>✓ Program Output · <b>LIVE COMPOSITION</b></p>
+      <p>✓ Facebook RTMPS · {connected.Facebook?"CONFIGURED":"NOT CONFIGURED"}</p>
+      <p>✓ Cloud egress · {egressId?(egressStatus||"STARTING"):"OFFLINE"}</p>
+      <p>✓ RTMP output · <b>{streamStatus||"WAITING"}</b></p>
+      <p>✓ Director → LiveKit · {livekitStatus}</p>
+      <p>✓ Encoder · {encoder?((encoder.width||"—")+"×"+(encoder.height||"—")+" @ "+(encoder.framerate||"—")+" FPS"):resolution+" @ "+fps+" FPS"}</p>
+      <p>✓ Encoder video bitrate · {encoder?.videoBitrateKbps??bitrate} kbps</p>
+      <p>✓ Encoder audio bitrate · {encoder?.audioBitrateKbps??128} kbps</p>
+      <p>✓ Uptime · {formatDuration(streamDuration)}</p>
+      <p>✓ Retries · {streamRetries??"—"}</p>
+      <p>✓ Stream started · {streamStartedAt?new Date(Number(streamStartedAt)/1000000>100000000000?Number(streamStartedAt)/1000000:Number(streamStartedAt)).toLocaleTimeString("en-KE",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"—"}</p>
+      <p>✓ Delivered bitrate · <b>NOT EXPOSED BY LIVEKIT</b></p>
+      <div className="health"><span>RTMP connection</span><b>{streamStatus==="ACTIVE"?"LIVEKIT → FACEBOOK ACTIVE":streamStatus||"OFFLINE"}</b></div>
+      <p className="muted">The values above are real cloud egress telemetry. The encoder bitrate is the configured output bitrate. LiveKit's StreamInfo does not expose actual outgoing bytes/bitrate, so the system deliberately does not invent a delivered-kbps number.</p>
+      <p className="muted">Facebook's own Live Producer preview remains the final confirmation that Facebook is displaying moving Program Output. An ACTIVE RTMP connection proves the cloud encoder is connected to the destination, not that the Facebook UI preview has been visually verified.</p>
+    </div>
+  </div>
 }
 function Analytics({live,program,streamStartedAt,totalViews,peakViewers,connected}:{live:boolean;program:MediaFile|null;streamStartedAt:number|null;totalViews:number;peakViewers:number;connected:Record<string,boolean>}){
   const [now,setNow]=useState(Date.now());

@@ -10,8 +10,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.os.Handler
-import android.os.Looper
 import android.view.View
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -74,6 +72,7 @@ class EncoderService : Service(), ConnectChecker {
   private val telemetryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private var webView: WebView? = null
   private var livekitRoom: Room? = null
+  private var endpoint = ""
   private var outputUrl = ""
   private var baseUrl = ""
   private var sessionId = ""
@@ -90,14 +89,14 @@ class EncoderService : Service(), ConnectChecker {
       ACTION_STOP -> {
         shouldRun = false
         main.removeCallbacksAndMessages(null)
-        sendStatus("STOPPED", "Facebook Connector stopped by user")
+        sendStatus("STOPPED • Facebook Connector stopped by user")
         stopEncoder()
         stopTelemetry()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
       }
       ACTION_START -> {
-        val endpoint = intent.getStringExtra(EXTRA_ENDPOINT).orEmpty()
+        endpoint = intent.getStringExtra(EXTRA_ENDPOINT).orEmpty()
         outputUrl = intent.getStringExtra(EXTRA_OUTPUT_URL).orEmpty()
         baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty().trimEnd('/')
         sessionId = intent.getStringExtra(EXTRA_SESSION).orEmpty()

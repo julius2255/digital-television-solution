@@ -3,6 +3,7 @@
   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
   <uses-feature android:name="android.hardware.camera" android:required="false"/>
   <application android:theme="@style/Theme.ChemChemTV" android:label="CHEMCHEM TV KENYA" android:allowBackup="true" android:supportsRtl="true">
     <activity android:name=".MainActivity" android:screenOrientation="landscape" android:launchMode="singleTop" android:exported="true">
@@ -20,6 +21,6 @@
     <service
       android:name=".BroadcastService"
       android:exported="false"
-      android:foregroundServiceType="mediaProjection"/>
+      android:foregroundServiceType="mediaProjection|microphone"/>
   </application>
 </manifest>

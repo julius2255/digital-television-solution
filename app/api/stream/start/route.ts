@@ -5,6 +5,9 @@ import {
   StreamOutput,
   StreamProtocol,
   EncodingOptions,
+  Output,
+  StartEgressRequest,
+  WebSource,
   AudioCodec,
   VideoCodec
 } from "livekit-server-sdk";
@@ -77,9 +80,9 @@ export async function POST(req: NextRequest) {
       Math.min(9000, Number(body.bitrate) || 4500)
     );
 
-    // Use the official LiveKit Server SDK so the request is serialized
-    // exactly as LiveKit expects. The web egress captures /output, which
-    // is the authoritative CHEMCHEM Program / Live Output.
+    // Use LiveKit's current unified StartEgress API with a WebSource.
+    // This captures the authoritative CHEMCHEM Program / Live Output page
+    // and sends that composed page to Facebook over RTMPS.
     const egressClient = new EgressClient(
       livekitHttpUrl(lkUrl),
       apiKey,
@@ -104,14 +107,29 @@ export async function POST(req: NextRequest) {
 
     let info: any;
     try {
-      info = await egressClient.startWebEgress(
-        outputUrl,
-        streamOutput,
-        {
-          awaitStartSignal: false,
-          encodingOptions
-        }
-      );
+      const request = new StartEgressRequest({
+        source: {
+          case: "web",
+          value: new WebSource({
+            url: outputUrl,
+            awaitStartSignal: false
+          })
+        },
+        encoding: {
+          case: "advanced",
+          value: encodingOptions
+        },
+        outputs: [
+          new Output({
+            config: {
+              case: "stream",
+              value: streamOutput
+            }
+          })
+        ]
+      });
+
+      info = await egressClient.startEgress(request);
     } catch (error: any) {
       const detail =
         error?.response?.data ||

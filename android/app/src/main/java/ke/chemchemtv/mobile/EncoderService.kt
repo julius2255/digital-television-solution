@@ -112,7 +112,7 @@ class EncoderService : Service(), ConnectChecker {
             applicationContext,
             this,
             BitmapSource(bitmap),
-            NoAudioSource()
+            SilentAudioSource()
           )
         } else {
           val audioInfo = probeAudio(uri)

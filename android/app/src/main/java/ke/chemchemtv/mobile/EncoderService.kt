@@ -89,6 +89,7 @@ class EncoderService : Service(), ConnectChecker {
       ACTION_STOP -> {
         shouldRun = false
         main.removeCallbacksAndMessages(null)
+        sendStatus("STOPPED", "Facebook Connector stopped by user")
         stopEncoder()
         stopTelemetry()
         stopForeground(STOP_FOREGROUND_REMOVE)

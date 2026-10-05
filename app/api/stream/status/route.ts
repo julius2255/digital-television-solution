@@ -39,18 +39,34 @@ export async function GET(req: NextRequest) {
     const info = Array.isArray(d.items) ? d.items[0] : d;
     const stream = Array.isArray(info?.stream_results) ? info.stream_results[0] : undefined;
 
+    const request = info?.request || {};
+    const advanced = request?.advanced || {};
+    const preset = request?.preset;
     return NextResponse.json({
       ok: true,
       egressId: info?.egress_id || egressId,
       status: egressStatusName(info?.status),
       error: info?.error || null,
+      sourceType: info?.source_type ?? null,
       streamStatus: streamStatusName(stream?.status),
       streamError: stream?.error || null,
-      startedAt: stream?.started_at ?? null,
-      endedAt: stream?.ended_at ?? null,
+      startedAt: stream?.started_at ?? info?.started_at ?? null,
+      endedAt: stream?.ended_at ?? info?.ended_at ?? null,
       duration: stream?.duration ?? null,
       retries: stream?.retries ?? null,
-      lastRetryAt: stream?.last_retry_at ?? null
+      lastRetryAt: stream?.last_retry_at ?? null,
+      encoder: {
+        width: advanced.width ?? null,
+        height: advanced.height ?? null,
+        framerate: advanced.framerate ?? null,
+        videoBitrateKbps: advanced.videoBitrate ?? advanced.video_bitrate ?? null,
+        audioBitrateKbps: advanced.audioBitrate ?? advanced.audio_bitrate ?? null,
+        videoCodec: advanced.videoCodec ?? advanced.video_codec ?? null,
+        audioCodec: advanced.audioCodec ?? advanced.audio_codec ?? null,
+        preset: preset ?? null
+      },
+      deliveredBitrateKbps: null,
+      deliveredBitrateAvailable: false
     });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error?.message || "Unable to inspect Facebook stream." }, { status: 500 });

@@ -383,7 +383,7 @@ export default function Home(){
     }
   };
   const flipCamera=async()=>{
-    const next=cameraFacing==="user"?"environment":"user" as "user"|"environment";
+    const next: "user"|"environment" = cameraFacing==="user" ? "environment" : "user";
     try{
       await unpublishDirectorTrack("director-camera-video");
       await unpublishDirectorTrack("director-camera-audio");

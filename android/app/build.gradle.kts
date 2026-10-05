@@ -8,8 +8,8 @@ android {
     applicationId = "ke.chemchemtv.mobile"
     minSdk = 23
     targetSdk = 36
-    versionCode = 8
-    versionName = "6.2"
+    versionCode = 9
+    versionName = "7.0"
   }
 }
 dependencies {

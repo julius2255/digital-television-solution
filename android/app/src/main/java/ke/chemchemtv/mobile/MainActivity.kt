@@ -8,6 +8,11 @@ import android.text.InputType
 import android.view.Gravity
 import android.view.animation.AlphaAnimation
 import android.widget.*
+import android.view.TextureView
+import android.view.View
+import android.widget.FrameLayout
+import androidx.appcompat.app.AlertDialog
+import com.pedro.library.generic.GenericStream
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -24,6 +29,10 @@ class MainActivity : AppCompatActivity() {
   private lateinit var serverInput: EditText
   private lateinit var keyInput: EditText
   private lateinit var goLive: Button
+  private lateinit var previewFrame: FrameLayout
+  private lateinit var logoView: ImageView
+  private var cameraTexture: TextureView? = null
+  private var cameraPreviewStream: GenericStream? = null
 
   private data class Media(val uri: Uri, val name: String, val type: String)
   private data class Layer(var name: String, var visible: Boolean = true, var locked: Boolean = false)
@@ -36,18 +45,20 @@ class MainActivity : AppCompatActivity() {
   private var transition = "cut"
   private var fadeSpeed = 800
   private var canvasZoom = 100
+  private var sourcePickerMode = "MEDIA"
   private val sections = arrayOf("STUDIO","PLAYLIST","SCHEDULE","AUTO NEWS","MEDIA","STREAMING","ANALYTICS","SETTINGS")
 
   private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
     if (uri == null) return@registerForActivityResult
     try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
-    val mime = contentResolver.getType(uri) ?: "video/*"
+    val mime = contentResolver.getType(uri) ?: "application/octet-stream"
     val name = uri.lastPathSegment?.substringAfterLast('/') ?: "Media"
     val item = Media(uri, name, mime)
     media.removeAll { it.uri == uri }
     media.add(item)
     selected = item
     status.text = "MEDIA • " + item.name
+    if (sourcePickerMode == "IMAGE") addImageLayer(item)
     refreshMedia()
   }
 
@@ -139,8 +150,12 @@ class MainActivity : AppCompatActivity() {
 
     top.addView(card().apply {
       addView(panelTitle("PREVIEW"))
+      previewFrame = FrameLayout(this@MainActivity).apply { setBackgroundColor(Color.BLACK) }
       previewVideo = VideoView(this@MainActivity).apply { setBackgroundColor(Color.BLACK) }
-      addView(previewVideo, LinearLayout.LayoutParams(0, dp(285), 1f))
+      previewFrame.addView(previewVideo, FrameLayout.LayoutParams(-1,-1))
+      logoView = ImageView(this@MainActivity).apply { visibility=View.GONE; scaleType=ImageView.ScaleType.FIT_CENTER }
+      previewFrame.addView(logoView, FrameLayout.LayoutParams(dp(180),dp(110),Gravity.TOP or Gravity.END))
+      addView(previewFrame, LinearLayout.LayoutParams(0, dp(285), 1f))
       val r = row()
       r.addView(button("▶ PLAY PREVIEW") { selected?.let { loadPreview(it) } ?: notify("Select media first") }, LinearLayout.LayoutParams(0,-2,1f))
       r.addView(button("■ STOP PREVIEW") { previewVideo.stopPlayback(); notify("Preview stopped") }, LinearLayout.LayoutParams(0,-2,1f))
@@ -184,9 +199,11 @@ class MainActivity : AppCompatActivity() {
       listOf("▣ Camera","▥ Screen Capture","▶ Video","▧ Image","♫ Audio","◎ Web Browser","T Text","▶ Media File").forEach { label ->
         addView(button(label) {
           when {
-            label.contains("Video") || label.contains("Media") || label.contains("Image") || label.contains("Audio") -> picker.launch(arrayOf("video/*","image/*","audio/*"))
-            label.contains("Web") -> notify("Web Browser source selected. Enter its URL in Streaming.")
-            label.contains("Camera") -> notify("Camera source selected. Native camera input module will use this source.")
+            label.contains("Video") || label.contains("Media") -> { sourcePickerMode="MEDIA"; picker.launch(arrayOf("video/*","audio/*")) }
+            label.contains("Image") -> { sourcePickerMode="IMAGE"; picker.launch(arrayOf("image/*")) }
+            label.contains("Audio") -> { sourcePickerMode="MEDIA"; picker.launch(arrayOf("audio/*")) }
+            label.contains("Web") -> showWebSourceDialog()
+            label.contains("Camera") -> startCameraPreview()
             label.contains("Screen") -> notify("Screen Capture is preview-only; it is never used as the Facebook broadcast source.")
             else -> notify(label + " source selected")
           }
@@ -200,7 +217,7 @@ class MainActivity : AppCompatActivity() {
       layerList.orientation = LinearLayout.VERTICAL
       addView(layerList)
       val r=row()
-      r.addView(button("＋ Logo / Image"){addLayer("Logo / Image")},LinearLayout.LayoutParams(0,-2,1f))
+      r.addView(button("＋ Logo / Image"){sourcePickerMode="IMAGE"; picker.launch(arrayOf("image/*"))},LinearLayout.LayoutParams(0,-2,1f))
       r.addView(button("＋ Video Layer"){addLayer("Video Layer")},LinearLayout.LayoutParams(0,-2,1f))
       r.addView(button("＋ Text / Lower Third"){addLayer("Text / Lower Third")},LinearLayout.LayoutParams(0,-2,1f))
       addView(r)
@@ -212,7 +229,7 @@ class MainActivity : AppCompatActivity() {
 
     lower.addView(card().apply {
       addView(panelTitle("QUICK ACTIONS"))
-      addView(button("＋ Upload Media"){picker.launch(arrayOf("video/*","image/*","audio/*"))})
+      addView(button("＋ Upload Media"){sourcePickerMode="MEDIA";picker.launch(arrayOf("video/*","image/*","audio/*"))})
       addView(button("PLAYLIST"){selectSection("PLAYLIST")})
       addView(button("SCHEDULE"){selectSection("SCHEDULE")})
       addView(button("AUTO NEWS"){selectSection("AUTO NEWS")})
@@ -226,7 +243,7 @@ class MainActivity : AppCompatActivity() {
       previewVideo.setVideoURI(m.uri)
       previewVideo.setOnPreparedListener { it.isLooping=true; it.start() }
       status.text="PREVIEW • " + m.name
-    } else notify("Preview selected: " + m.name)
+    } else if(m.type.startsWith("image/")) showImageInPreview(m) else notify("Preview selected: " + m.name)
   }
 
   private fun loadProgram(m: Media) {
@@ -245,6 +262,64 @@ class MainActivity : AppCompatActivity() {
       programVideo.startAnimation(AlphaAnimation(0f,1f).apply{duration=fadeSpeed.toLong();fillAfter=true})
       notify("FADE → PROGRAM (" + fadeSpeed + "ms)")
     } else notify("CUT → PROGRAM")
+  }
+
+  private fun addImageLayer(m: Media) {
+    selected=m
+    showImageInPreview(m)
+    layers.add(Layer("Logo / Image • "+m.name))
+    refreshLayers()
+    notify("Image added to Preview")
+  }
+
+  private fun showImageInPreview(m: Media) {
+    if(!::logoView.isInitialized){ notify("Open Studio first"); return }
+    logoView.setImageURI(m.uri)
+    logoView.visibility=View.VISIBLE
+    status.text="IMAGE • "+m.name
+  }
+
+  private fun showWebSourceDialog() {
+    val input=EditText(this).apply{hint="https://...";setSingleLine(true);setTextColor(Color.WHITE)}
+    AlertDialog.Builder(this).setTitle("WEB SOURCE URL").setView(input)
+      .setNegativeButton("Cancel",null)
+      .setPositiveButton("Add"){_,_-> val url=input.text.toString().trim(); if(url.isBlank()) notify("Enter a URL") else notify("Web source added: "+url)}
+      .show()
+  }
+
+  private fun startCameraPreview() {
+    if(ContextCompat.checkSelfPermission(this,android.Manifest.permission.CAMERA)!=android.content.pm.PackageManager.PERMISSION_GRANTED){
+      requestPermissions(arrayOf(android.Manifest.permission.CAMERA,android.Manifest.permission.RECORD_AUDIO),700)
+      notify("Allow Camera and Microphone, then tap Camera again")
+      return
+    }
+    if(!::previewFrame.isInitialized){notify("Open Studio first");return}
+    stopCameraPreview()
+    cameraTexture=TextureView(this)
+    previewFrame.removeView(previewVideo)
+    previewFrame.addView(cameraTexture,0,FrameLayout.LayoutParams(-1,-1))
+    try{
+      cameraPreviewStream=GenericStream(this,object:com.pedro.common.ConnectChecker{
+        override fun onConnectionStarted(url:String){}
+        override fun onConnectionSuccess(){}
+        override fun onNewBitrate(bitrate:Long){}
+        override fun onConnectionFailed(reason:String){}
+        override fun onDisconnect(){}
+        override fun onAuthError(){}
+        override fun onAuthSuccess(){}
+      })
+      val ok=cameraPreviewStream!!.prepareVideo(1280,720,2500000,30) && cameraPreviewStream!!.prepareAudio(44100,true,128000)
+      if(!ok) throw IllegalStateException("Camera preview preparation failed")
+      cameraPreviewStream!!.startPreview(cameraTexture)
+      status.text="CAMERA • PREVIEW"
+      notify("Camera preview is running")
+    }catch(e:Exception){stopCameraPreview();notify("Camera error: "+(e.message?:"unable to open camera"))}
+  }
+
+  private fun stopCameraPreview(){
+    try{cameraPreviewStream?.stopPreview()}catch(_:Exception){}
+    try{cameraPreviewStream?.release()}catch(_:Exception){}
+    cameraPreviewStream=null
   }
 
   private fun addLayer(name:String) { layers.add(Layer(name)); refreshLayers(); notify("Layer added: " + name) }
@@ -391,17 +466,21 @@ class MainActivity : AppCompatActivity() {
       stopService(Intent(this,EncoderService::class.java).setAction(EncoderService.ACTION_STOP))
       live=false;goLive.text="● GO LIVE";status.text="STOPPED";notify("Broadcast stopped");return
     }
+    val cameraSelected = cameraPreviewStream != null
     val m=program ?: selected
-    if(m==null || !m.type.startsWith("video/")){notify("Select a program video first");return}
-    val server=if(::serverInput.isInitialized)serverInput.text.toString().trim() else "rtmps://live-api-s.facebook.com:443/rtmp/"
+    if(!cameraSelected && (m==null || (!m.type.startsWith("video/") && !m.type.startsWith("image/")))){
+      notify("Select a video/image or open Camera first");return
+    }
+    val server=if(::serverInput.isInitialized)serverInput.text.toString().trim() else "rtmps://live-api.s-facebook.com:443/rtmp/"
     val key=if(::keyInput.isInitialized)keyInput.text.toString().trim() else ""
     if(server.isBlank()||key.isBlank()){notify("Enter Facebook Stream Key");return}
     val endpoint=server.trimEnd('/')+"/"+key.trimStart('/')
+    if(cameraSelected) stopCameraPreview()
     val i=Intent(this,EncoderService::class.java).apply{
       action=EncoderService.ACTION_START
       putExtra(EncoderService.EXTRA_ENDPOINT,endpoint)
-      putExtra(EncoderService.EXTRA_MEDIA_URL,m.uri.toString())
-      putExtra(EncoderService.EXTRA_KIND,"VIDEO")
+      putExtra(EncoderService.EXTRA_MEDIA_URL,if(cameraSelected) "" else m!!.uri.toString())
+      putExtra(EncoderService.EXTRA_KIND,if(cameraSelected) "CAMERA" else if(m!!.type.startsWith("image/")) "IMAGE" else "VIDEO")
     }
     try{ContextCompat.startForegroundService(this,i);status.text="CONNECTING • FACEBOOK RTMPS";goLive.text="CONNECTING..."}catch(e:Exception){notify("Encoder error: "+(e.message ?: "start failed"))}
   }
@@ -433,5 +512,5 @@ class MainActivity : AppCompatActivity() {
 
   private fun notify(message:String){status.text="• "+message;Toast.makeText(this,message,Toast.LENGTH_SHORT).show()}
 
-  override fun onDestroy(){try{unregisterReceiver(statusReceiver)}catch(_:Exception){};super.onDestroy()}
+  override fun onDestroy(){stopCameraPreview();try{unregisterReceiver(statusReceiver)}catch(_:Exception){};super.onDestroy()}
 }

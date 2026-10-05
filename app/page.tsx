@@ -1074,7 +1074,7 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl,li
   const saveRtmp=()=>{
     setError("");setMessage("");
     if(!rtmpServer.trim()||!streamKey.trim()){setError("Enter both the Facebook Server URL and Stream Key.");return}
-    if(!/^rtmps?:\\/\\//i.test(rtmpServer.trim())){setError("Server URL must start with rtmp:// or rtmps://.");return}
+    if(!/^rtmps?:\/\//i.test(rtmpServer.trim())){setError("Server URL must start with rtmp:// or rtmps://.");return}
     setConnected({...connected,Facebook:true});
     setMessage("Facebook destination saved. Start the real cloud RTMP connection when your Program Output is ready.");
   };

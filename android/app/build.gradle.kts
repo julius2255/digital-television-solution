@@ -8,8 +8,8 @@ android {
     applicationId = "ke.chemchemtv.mobile"
     minSdk = 23
     targetSdk = 36
-    versionCode = 3
-    versionName = "3.0"
+    versionCode = 4
+    versionName = "4.0"
   }
 }
 dependencies {
@@ -17,5 +17,4 @@ dependencies {
   implementation("androidx.appcompat:appcompat:1.7.1")
   implementation("com.google.android.material:material:1.13.0")
   implementation("com.github.pedroSG94.RootEncoder:library:2.7.5")
-  implementation("com.github.pedroSG94.RootEncoder:extra-sources:2.7.5")
 }

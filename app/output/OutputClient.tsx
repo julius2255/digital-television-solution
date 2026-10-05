@@ -95,6 +95,7 @@ export default function OutputClient({ name }: { name: string }) {
   const cameraRef = useRef<HTMLVideoElement>(null);
   const screenRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const silenceRef = useRef<HTMLAudioElement>(null);
   const roomRef = useRef<Room | null>(null);
   const renderedMediaKeyRef = useRef("");
   const stateRef = useRef<ProgramState | null>(null);
@@ -196,6 +197,16 @@ export default function OutputClient({ name }: { name: string }) {
     audioRef.current.muted = !!state?.muted || (state?.source !== "camera" && state?.source !== "screen");
     if (remoteAudio) audioRef.current.play().catch(() => {});
   }, [remoteAudio, state?.volume, state?.muted, state?.source]);
+
+  useEffect(() => {
+    // A real silent audio track keeps image/graphic programs valid for RTMP
+    // while never replacing the active Program audio source.
+    const audio = silenceRef.current;
+    if (!audio) return;
+    audio.volume = 1;
+    audio.muted = false;
+    audio.play().catch(() => {});
+  }, []);
 
   useEffect(() => {
     // Keep a real silent audio track in the browser output for image/graphic

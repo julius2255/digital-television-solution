@@ -104,7 +104,7 @@ class MainActivity : AppCompatActivity() {
     root.addView(tabs)
 
     preview = VideoView(this).apply { setBackgroundColor(0xFF000000.toInt()) }
-    root.addView(preview, LinearLayout.LayoutParams(-1, 0, 1f))
+    root.addView(preview, LinearLayout.LayoutParams(-1, 240))
 
     mediaName = TextView(this).apply {
       text = "PROGRAM • No media selected"

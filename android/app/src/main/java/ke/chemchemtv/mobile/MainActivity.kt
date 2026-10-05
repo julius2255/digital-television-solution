@@ -68,7 +68,7 @@ class MainActivity : AppCompatActivity() {
     root.addView(choose)
     serverInput = EditText(this).apply { hint = "Facebook RTMPS Server"; setText("rtmps://live-api-s.facebook.com:443/rtmp/"); setTextColor(0xFFFFFFFF.toInt()); setHintTextColor(0xFF888888.toInt()); isSingleLine = true }
     root.addView(serverInput)
-    keyInput = EditText(this).apply { hint = "Facebook Stream Key"; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD; setTextColor(0xFFFFFFFF.toInt()); setHintTextColor(0xFF888888.toInt()); singleLine = true }
+    keyInput = EditText(this).apply { hint = "Facebook Stream Key"; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD; setTextColor(0xFFFFFFFF.toInt()); setHintTextColor(0xFF888888.toInt()); isSingleLine = true }
     root.addView(keyInput)
     startButton = Button(this).apply { text = "START LIVE"; setOnClickListener { toggleLive() } }
     root.addView(startButton)

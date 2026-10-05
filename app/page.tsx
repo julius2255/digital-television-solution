@@ -1025,9 +1025,9 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl,li
   useEffect(()=>{
     try{
       const s=localStorage.getItem("dtv-rtmp-server"),k=localStorage.getItem("dtv-stream-key"),
-        b=localStorage.getItem("dtv-bitrate"),f=localStorage.getItem("dtv-fps"),q=localStorage.getItem("dtv-resolution"),
-        e=localStorage.getItem("dtv-facebook-egress-id");
-      if(s)setRtmpServer(s);if(k)setStreamKey(k);if(b)setBitrate(Number(b));if(f)setFps(Number(f));if(q)setResolution(q);if(e)setEgressId(e);
+        b=localStorage.getItem("dtv-bitrate"),f=localStorage.getItem("dtv-fps"),q=localStorage.getItem("dtv-resolution");
+      if(s)setRtmpServer(s);if(k)setStreamKey(k);if(b)setBitrate(Number(b));if(f)setFps(Number(f));if(q)setResolution(q);
+      localStorage.removeItem("dtv-facebook-egress-id");
     }catch{}
   },[]);
 
@@ -1090,7 +1090,7 @@ function Streaming({connected,setConnected,live,program,preview,programWebUrl,li
     if(!rtmpServer.trim()||!streamKey.trim()){setError("Enter both the Facebook Server URL and Stream Key.");return}
     if(!/^rtmps?:\/\//i.test(rtmpServer.trim())){setError("Server URL must start with rtmp:// or rtmps://.");return}
     setConnected({...connected,Facebook:true});
-    setMessage("Facebook destination saved. Start the real cloud RTMP connection when your Program Output is ready.");
+    setMessage("Facebook destination saved. Start the Android Connector when your Program Output is ready.");
   };
 
   const startFacebook=()=>{

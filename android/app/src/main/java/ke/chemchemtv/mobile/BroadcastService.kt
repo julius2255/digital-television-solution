@@ -79,7 +79,6 @@ class BroadcastService : Service(), ConnectChecker {
 
       val screenSource = ScreenSource(applicationContext,projection!!)
       val newStream = GenericStream(applicationContext,this,NoVideoSource(),MicrophoneSource())
-      newStream.getGlInterface().setCameraOrientation(0)
       newStream.getGlInterface().setForceRender(true,30)
 
       val videoReady = newStream.prepareVideo(1280,720,3500 * 1000,rotation = 0)
@@ -89,13 +88,14 @@ class BroadcastService : Service(), ConnectChecker {
         throw IllegalStateException("H.264/AAC encoder preparation failed on this device")
       }
 
+      newStream.getGlInterface().setCameraOrientation(0)
       newStream.changeVideoSource(screenSource)
       if (Build.VERSION.SDK_INT >= 29) {
-        try { newStream.changeAudioSource(InternalAudioSource(projection!!)) } catch (_: Exception) {}
+        newStream.changeAudioSource(InternalAudioSource(projection!!))
       }
       stream?.release()
       stream = newStream
-      sendStatus("ENCODER_READY","Program screen active • H.264 720p30 + AAC 128kbps")
+      sendStatus("ENCODER_READY","Program screen attached • H.264 720p30 + AAC 128kbps")
       newStream.startStream(endpoint)
     } catch (e: Exception) {
       Log.e("CHEMCHEM_BROADCAST","Broadcast start failed",e)

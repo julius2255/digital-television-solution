@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     const endpoint = hostFromLivekit(lkUrl) + "/twirp/livekit.Egress/StartEgress";
     const preset = resolution === "1280x720" ? "H264_720P_30" : "H264_1080P_30";
     const egressRequest = {
-      web: { url: outputUrl, await_start_signal: true },
+      web: { url: outputUrl, await_start_signal: false },
       preset,
       outputs: [{ stream: { protocol: "RTMP", urls: [facebookUrl] } }]
     };

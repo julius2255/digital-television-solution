@@ -1,6 +1,7 @@
 "use client";
 
 import {useEffect,useRef,useState} from "react";
+import {upload} from "@vercel/blob/client";
 type Section="studio"|"playlist"|"schedule"|"news"|"media"|"streaming"|"analytics"|"settings";
 type MediaFile={id:string;name:string;type:string;url:string;size:number};
 type NewsOnAir={title:string;description:string;image?:string;source?:string;category?:string;published?:string;link?:string};
@@ -171,20 +172,45 @@ export default function Home(){
   const previewMedia=mediaFiles.find(f=>f.id===previewMediaId)||null;
   const programMedia=mediaFiles.find(f=>f.id===programMediaId)||null;
 
-  const addFiles=(files:FileList|null)=>{
+  const addFiles=async(files:FileList|null)=>{
     if(!files)return;
-    const incoming=Array.from(files).map((file,i)=>({
-      id:String(Date.now())+"-"+i,name:file.name,type:file.type||"application/octet-stream",
-      url:URL.createObjectURL(file),size:file.size
-    }));
+    const selected=Array.from(files);
+    if(!selected.length)return;
+    notify("Uploading "+selected.length+" media file"+(selected.length>1?"s":"")+" to CHEMCHEM cloud storage…");
+    const incoming:MediaFile[]=[];
+    for(let i=0;i<selected.length;i++){
+      const file=selected[i];
+      try{
+        const blob=await upload("chemchem/"+Date.now()+"-"+file.name,file,{
+          access:"public",
+          handleUploadUrl:"/api/media/upload",
+          contentType:file.type||"application/octet-stream",
+          multipart:file.size>8*1024*1024,
+          onUploadProgress:(event)=>{
+            if(event.total){
+              notify("Uploading "+file.name+" — "+Math.round(event.percentage)+"%");
+            }
+          }
+        });
+        incoming.push({
+          id:blob.url,
+          name:file.name,
+          type:file.type||"application/octet-stream",
+          url:blob.url,
+          size:file.size
+        });
+      }catch(error){
+        notify("Upload failed for "+file.name);
+      }
+    }
+    if(!incoming.length)return;
     setMediaFiles(v=>[...v,...incoming]);
     setPlaylistIds(v=>[...v,...incoming.map(x=>x.id)]);
-    if(incoming[0]){
-      setPreviewMediaId(incoming[0].id);
-      setPreviewPlaying(false);
-      setActiveSource(incoming[0].type.startsWith("audio/")?"audio":incoming[0].type.startsWith("image/")?"image":"video");
-      notify(incoming[0].name+" loaded into Preview");
-    }
+    const first=incoming[0];
+    setPreviewMediaId(first.id);
+    setPreviewPlaying(false);
+    setActiveSource(first.type.startsWith("audio/")?"audio":first.type.startsWith("image/")?"image":"video");
+    notify(incoming.length+" media file"+(incoming.length>1?"s":"")+" uploaded. "+first.name+" is ready in Preview.");
   };
 
   const selectMedia=(id:string)=>{

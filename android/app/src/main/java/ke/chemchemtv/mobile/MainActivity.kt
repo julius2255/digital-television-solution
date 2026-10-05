@@ -33,6 +33,8 @@ class MainActivity : AppCompatActivity() {
   private lateinit var logoView: ImageView
   private var cameraTexture: TextureView? = null
   private var cameraPreviewStream: GenericStream? = null
+  private var cameraFront = false
+  private val prefs by lazy { getSharedPreferences("chemchem", MODE_PRIVATE) }
 
   private data class Media(val uri: Uri, val name: String, val type: String)
   private data class Layer(var name: String, var visible: Boolean = true, var locked: Boolean = false)
@@ -287,6 +289,11 @@ class MainActivity : AppCompatActivity() {
       .show()
   }
 
+  private fun saveFacebookSettings() {
+    if(!::serverInput.isInitialized || !::keyInput.isInitialized)return
+    prefs.edit().putString("fb_server",serverInput.text.toString().trim()).putString("fb_key",keyInput.text.toString().trim()).apply()
+  }
+
   private fun startCameraPreview() {
     if(ContextCompat.checkSelfPermission(this,android.Manifest.permission.CAMERA)!=android.content.pm.PackageManager.PERMISSION_GRANTED){
       requestPermissions(arrayOf(android.Manifest.permission.CAMERA,android.Manifest.permission.RECORD_AUDIO),700)
@@ -311,9 +318,17 @@ class MainActivity : AppCompatActivity() {
       val ok=cameraPreviewStream!!.prepareVideo(1280,720,2500000,30) && cameraPreviewStream!!.prepareAudio(44100,true,128000)
       if(!ok) throw IllegalStateException("Camera preview preparation failed")
       cameraPreviewStream!!.startPreview(cameraTexture)
-      status.text="CAMERA • PREVIEW"
+      status.text="CAMERA • "+if(cameraFront)"FRONT":"BACK"+" • PREVIEW"
       notify("Camera preview is running")
     }catch(e:Exception){stopCameraPreview();notify("Camera error: "+(e.message?:"unable to open camera"))}
+  }
+
+  private fun switchCamera(){
+    try {
+      val source=cameraPreviewStream?.videoSource
+      if(source is com.pedro.encoder.input.sources.video.Camera2Source){ source.switchCamera(); cameraFront=!cameraFront; status.text="CAMERA • "+if(cameraFront)"FRONT":"BACK"+" • PREVIEW" }
+      else notify("Camera source is not active")
+    } catch(e:Exception){notify("Camera switch failed: "+(e.message?:"unknown error"))}
   }
 
   private fun stopCameraPreview(){
@@ -445,11 +460,11 @@ class MainActivity : AppCompatActivity() {
     val two=row()
     val left=card();left.addView(panelTitle("FACEBOOK RTMPS"))
     serverInput=EditText(this).apply{hint="Facebook Server URL";setText("rtmps://live-api-s.facebook.com:443/rtmp/");setTextColor(Color.WHITE);isSingleLine=true}
-    keyInput=EditText(this).apply{hint="Facebook Stream Key";inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD;setTextColor(Color.WHITE);isSingleLine=true}
+    keyInput=EditText(this).apply{hint="Facebook Stream Key";inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD;setTextColor(Color.WHITE);isSingleLine=true;setText(prefs.getString("fb_key",""))}
     left.addView(serverInput);left.addView(keyInput)
     val r=row()
-    r.addView(button("✓ CONNECT FACEBOOK RTMPS"){notify("Facebook destination configured")},LinearLayout.LayoutParams(0,-2,1f))
-    r.addView(button("CLEAR"){serverInput.setText("");keyInput.setText("")},LinearLayout.LayoutParams(0,-2,1f))
+    r.addView(button("✓ CONNECT FACEBOOK RTMPS"){saveFacebookSettings();notify("Facebook destination saved. Use GO LIVE to test the real RTMPS connection.")},LinearLayout.LayoutParams(0,-2,1f))
+    r.addView(button("CLEAR"){serverInput.setText("");keyInput.setText("");prefs.edit().remove("fb_server").remove("fb_key").apply()},LinearLayout.LayoutParams(0,-2,1f))
     left.addView(r)
     left.addView(button("● GO LIVE / OPEN NATIVE ENCODER"){toggleLive()})
     val settings=card();settings.addView(panelTitle("ENCODER SETTINGS"))

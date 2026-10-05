@@ -1,27 +1,29 @@
 package ke.chemchemtv.mobile
 
 import android.Manifest
+import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.media.projection.MediaProjectionManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
-import android.util.Log
 import android.text.InputType
 import android.view.Gravity
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.*
-import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.pedro.common.ConnectChecker
-import com.pedro.library.rtmp.RtmpStream
-import com.pedro.encoder.input.sources.video.Camera2Source
-import com.pedro.encoder.input.sources.audio.MicrophoneSource
-import com.pedro.library.view.OpenGlView
+import androidx.core.content.ContextCompat.registerReceiver
 
-class MainActivity : AppCompatActivity(), ConnectChecker {
-  private lateinit var stream: RtmpStream
+class MainActivity : AppCompatActivity() {
   private lateinit var status: TextView
   private lateinit var server: EditText
   private lateinit var key: EditText
@@ -29,250 +31,174 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
   private lateinit var diagnostics: TextView
   private lateinit var programLabel: TextView
   private lateinit var programSource: TextView
+  private lateinit var output: FrameLayout
   private var streaming = false
-  private var encodersReady = false
-  private lateinit var previewView: OpenGlView
+  private var programWebUrl = ""
+  private var projectionRequestPending = false
+  private val captureRequest = 400
 
-  override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    val root = LinearLayout(this).apply {
-      orientation = LinearLayout.VERTICAL
-      setBackgroundColor(0xFF07111F.toInt())
-    }
-    previewView = OpenGlView(this)
-    root.addView(previewView, LinearLayout.LayoutParams(-1, 0, 1f))
-
-    val controls = LinearLayout(this).apply {
-      orientation = LinearLayout.VERTICAL
-      setPadding(20, 14, 20, 14)
-    }
-    server = EditText(this).apply {
-      hint = "Facebook Server URL"
-      setText(getPreferences(MODE_PRIVATE).getString("server", "rtmps://live-api-s.facebook.com:443/rtmp/"))
-      setSingleLine(true)
-    }
-    key = EditText(this).apply {
-      hint = "Facebook Stream Key"
-      setText(getPreferences(MODE_PRIVATE).getString("key", ""))
-      setSingleLine(true)
-      inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-    }
-    controls.addView(server)
-    controls.addView(key)
-    programLabel = TextView(this).apply {
-      text = "PROGRAM: Standby"
-      setTextColor(Color.WHITE)
-      textSize = 16f
-      setPadding(0, 8, 0, 0)
-    }
-    controls.addView(programLabel)
-    programSource = TextView(this).apply {
-      text = "SOURCE: Waiting for control room"
-      setTextColor(Color.LTGRAY)
-      textSize = 13f
-      setPadding(0, 2, 0, 4)
-    }
-    controls.addView(programSource)
-    diagnostics = TextView(this).apply {
-      text = "Engine diagnostics: waiting"
-      setTextColor(Color.LTGRAY)
-      textSize = 13f
-      setPadding(0, 8, 0, 8)
-    }
-    controls.addView(diagnostics)
-
-    val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-    status = TextView(this).apply {
-      text = "● READY"
-      setTextColor(Color.rgb(102, 221, 136))
-      textSize = 16f
-    }
-    goButton = Button(this).apply {
-      text = "GO LIVE"
-      setOnClickListener { toggleLive() }
-    }
-    row.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
-    row.addView(goButton)
-    controls.addView(row)
-    root.addView(controls, LinearLayout.LayoutParams(-1, -2))
-    setContentView(root)
-    handleEncoderIntent(intent)
-
-    if (hasPermissions()) {
-      initializeStreamingEngine()
-    } else {
-      goButton.isEnabled = false
-      status.text = "● CAMERA/MIC PERMISSION REQUIRED"
-      status.setTextColor(Color.rgb(255, 193, 7))
-      diagnostics.text = "Grant camera and microphone permissions to initialize the encoder"
-      ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO), 10)
+  private val statusReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+      if (intent?.action != BroadcastService.ACTION_STATUS) return
+      val s = intent.getStringExtra(BroadcastService.EXTRA_STATUS).orEmpty()
+      val detail = intent.getStringExtra(BroadcastService.EXTRA_DETAIL).orEmpty()
+      runOnUiThread {
+        diagnostics.text = detail
+        when (s) {
+          "LIVE" -> { streaming = true; status.text = "● LIVE — FACEBOOK RECEIVING PROGRAM"; status.setTextColor(Color.rgb(25,198,111)); setLiveButton(true) }
+          "CONNECTING", "ENCODER_READY" -> { status.text = "● $s"; status.setTextColor(Color.rgb(255,193,7)); setLiveButton(false) }
+          "ERROR" -> { streaming = false; status.text = "● STREAM ERROR"; status.setTextColor(Color.rgb(255,80,90)); setLiveButton(false); Toast.makeText(this@MainActivity, detail, Toast.LENGTH_LONG).show() }
+          "STOPPED" -> { streaming = false; status.text = "● READY"; status.setTextColor(Color.rgb(102,221,136)); setLiveButton(false) }
+        }
+      }
     }
   }
 
-  override fun onNewIntent(intent: android.content.Intent) {
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    buildUi()
+    handleEncoderIntent(intent)
+    if (!hasPermissions()) {
+      ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 10)
+    }
+  }
+
+  override fun onResume() {
+    super.onResume()
+    registerReceiver(this, statusReceiver, IntentFilter(BroadcastService.ACTION_STATUS), ContextCompat.RECEIVER_NOT_EXPORTED)
+  }
+
+  override fun onPause() {
+    unregisterReceiverSafe()
+    super.onPause()
+  }
+
+  private fun unregisterReceiverSafe() { try { unregisterReceiver(statusReceiver) } catch (_: Exception) {} }
+
+  override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
     handleEncoderIntent(intent)
   }
 
-  private fun handleEncoderIntent(intent: android.content.Intent?) {
-    if (intent == null) return
-    val data = intent.data
-    val serverValue = data?.getQueryParameter("server")
-    val keyValue = data?.getQueryParameter("key")
-    val program = data?.getQueryParameter("program")
-    val source = data?.getQueryParameter("source")
-    if (serverValue.isNullOrBlank() && program.isNullOrBlank()) return
-    if (!serverValue.isNullOrBlank()) server.setText(serverValue)
-    if (!keyValue.isNullOrBlank()) key.setText(keyValue)
-    programLabel.text = "PROGRAM: " + (program ?: "Standby")
-    programSource.text = "SOURCE: " + (source ?: "Standby") + " • Facebook RTMPS ready"
-    diagnostics.text = "Control room handoff received. Program: " + (program ?: "Standby")
+  private fun buildUi() {
+    val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(0xFF07111F.toInt()) }
+    output = FrameLayout(this)
+    root.addView(output, LinearLayout.LayoutParams(-1, 0, 1f))
+
+    val controls = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(18,12,18,12) }
+    server = EditText(this).apply {
+      hint = "Facebook Server URL"
+      setText(getPreferences(MODE_PRIVATE).getString("server","rtmps://live-api-s.facebook.com:443/rtmp/"))
+      setSingleLine(true)
+    }
+    key = EditText(this).apply {
+      hint = "Facebook Stream Key"
+      setText(getPreferences(MODE_PRIVATE).getString("key",""))
+      setSingleLine(true)
+      inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+    }
+    controls.addView(server); controls.addView(key)
+    programLabel = TextView(this).apply { text="PROGRAM: Standby"; setTextColor(Color.WHITE); textSize=16f; setPadding(0,6,0,0) }
+    programSource = TextView(this).apply { text="SOURCE: Waiting for control room"; setTextColor(Color.LTGRAY); textSize=13f }
+    diagnostics = TextView(this).apply { text="Engine: waiting for Facebook destination"; setTextColor(Color.LTGRAY); textSize=13f; setPadding(0,6,0,8) }
+    controls.addView(programLabel); controls.addView(programSource); controls.addView(diagnostics)
+    val row = LinearLayout(this).apply { gravity=Gravity.CENTER_VERTICAL }
+    status = TextView(this).apply { text="● READY"; setTextColor(Color.rgb(102,221,136)); textSize=16f }
+    goButton = Button(this).apply { text="GO LIVE"; setOnClickListener { toggleLive() } }
+    row.addView(status, LinearLayout.LayoutParams(0,-2,1f)); row.addView(goButton); controls.addView(row)
+    root.addView(controls, LinearLayout.LayoutParams(-1,-2))
+    setContentView(root)
+    renderProgramOutput(false)
   }
 
-  private fun initializeStreamingEngine() {
-    if (::stream.isInitialized) return
-    stream = RtmpStream(this, this, Camera2Source(this), MicrophoneSource())
-    val videoPrepared = try {
-      stream.prepareVideo(1280, 720, 3500 * 1000, 30)
-    } catch (e: Exception) {
-      Log.e("CHEMCHEM_RTMP", "Video preparation failed", e)
-      false
-    }
-    val audioPrepared = try {
-      stream.prepareAudio(44100, true, 128 * 1000)
-    } catch (e: Exception) {
-      Log.e("CHEMCHEM_RTMP", "Audio preparation failed", e)
-      false
-    }
-    encodersReady = videoPrepared && audioPrepared
-    if (encodersReady) {
-      diagnostics.text = "Engine diagnostics: H.264 720p30 + AAC 44.1kHz ready • Camera2 source active"
-      stream.startPreview(previewView)
-      if (!stream.isOnPreview) {
-        encodersReady = false
-        diagnostics.text = "Engine diagnostics: camera preview could not start"
-        status.text = "● CAMERA ERROR"
-        status.setTextColor(Color.rgb(255, 80, 90))
-        goButton.isEnabled = false
-        return
+  private fun handleEncoderIntent(intent: Intent?) {
+    val data=intent?.data ?: return
+    data.getQueryParameter("server")?.takeIf{it.isNotBlank()}?.let{server.setText(it)}
+    data.getQueryParameter("key")?.takeIf{it.isNotBlank()}?.let{key.setText(it)}
+    data.getQueryParameter("program")?.let{programLabel.text="PROGRAM: $it"; renderProgramOutput(false)}
+    data.getQueryParameter("source")?.let{programSource.text="SOURCE: $it • Facebook program output"}
+    programWebUrl=data.getQueryParameter("webUrl").orEmpty()
+    diagnostics.text="Control room handoff received. The Android encoder will capture PROGRAM output, not the camera."
+  }
+
+  private fun renderProgramOutput(onAir: Boolean) {
+    output.removeAllViews()
+    if (onAir && programWebUrl.startsWith("http")) {
+      val web=WebView(this).apply {
+        settings.javaScriptEnabled=true
+        settings.mediaPlaybackRequiresUserGesture=false
+        settings.domStorageEnabled=true
+        webViewClient=WebViewClient()
+        loadUrl(programWebUrl)
       }
-      goButton.isEnabled = true
-      status.text = "● READY — CAMERA/AUDIO ENGINE INITIALIZED"
-      status.setTextColor(Color.rgb(102, 221, 136))
+      output.addView(web, FrameLayout.LayoutParams(-1,-1))
     } else {
-      diagnostics.text = "Engine diagnostics: encoder preparation failed — check MediaCodec support"
-      status.text = "● ENCODER ERROR"
-      status.setTextColor(Color.rgb(255, 80, 90))
-      goButton.isEnabled = false
+      val box=LinearLayout(this).apply {
+        orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER
+        setBackgroundColor(Color.BLACK)
+      }
+      val title=TextView(this).apply { text="CHEMCHEM TV KENYA"; textSize=34f; setTextColor(Color.WHITE); gravity=Gravity.CENTER }
+      val sub=TextView(this).apply { text=if(onAir) "● ON AIR\n"+programLabel.text else "PROGRAM OUTPUT\nPreview / standby"; textSize=20f; setTextColor(Color.LTGRAY); gravity=Gravity.CENTER; setPadding(0,16,0,0) }
+      box.addView(title); box.addView(sub); output.addView(box, FrameLayout.LayoutParams(-1,-1))
     }
   }
 
-  private fun setLiveButton(live: Boolean) {
-    if (!::goButton.isInitialized) return
-    goButton.text = if (live) "● LIVE — CONNECTED" else "GO LIVE"
-    val color = if (live) Color.rgb(25, 198, 111) else Color.rgb(229, 43, 59)
-    goButton.background = GradientDrawable().apply { setColor(color); cornerRadius = 14f }
-    goButton.setTextColor(if (live) Color.rgb(5, 25, 14) else Color.WHITE)
+  private fun setLiveButton(live:Boolean) {
+    goButton.text=if(live) "■ STOP LIVE" else "GO LIVE"
+    goButton.background=GradientDrawable().apply{setColor(if(live) Color.rgb(25,198,111) else Color.rgb(229,43,59));cornerRadius=14f}
+    goButton.setTextColor(if(live) Color.rgb(5,25,14) else Color.WHITE)
   }
 
   private fun toggleLive() {
-    if (streaming) {
-      stream.stopStream()
-      setLiveButton(false)
+    if(streaming) {
+      stopService(Intent(this, BroadcastService::class.java))
+      renderProgramOutput(false)
       return
     }
-    val base = server.text.toString().trim()
-    val streamKey = key.text.toString().trim()
-    if (!encodersReady) {
-      Toast.makeText(this, "Video/audio encoders are not ready", Toast.LENGTH_LONG).show()
-      return
-    }
-    if (!hasInternet()) {
-      Toast.makeText(this, "No validated internet connection", Toast.LENGTH_LONG).show()
-      diagnostics.text = "RTMP ERROR: no validated internet connection"
-      return
-    }
-    if (base.isEmpty()) {
-      Toast.makeText(this, "Enter an RTMPS/RTMP ingest URL or server URL", Toast.LENGTH_SHORT).show()
-      return
-    }
-    val endpoint = if (streamKey.isEmpty()) {
-      base
-    } else {
-      base.trimEnd('/') + "/" + streamKey.trimStart('/')
-    }
-    if (streamKey.isEmpty() && base.contains("facebook.com", ignoreCase = true)) {
-      Toast.makeText(this, "Paste the Facebook Stream Key", Toast.LENGTH_LONG).show()
-      return
-    }
-    getPreferences(MODE_PRIVATE).edit().putString("server", base).putString("key", streamKey).apply()
-    if (!endpoint.startsWith("rtmps://", ignoreCase = true) && !endpoint.startsWith("rtmp://", ignoreCase = true)) {
-      Toast.makeText(this, "Use a valid rtmps:// or rtmp:// ingest endpoint", Toast.LENGTH_LONG).show()
-      return
-    }
-    diagnostics.text = "RTMPS handshake starting • Video source: Camera2 1280x720"
-    if (!stream.isOnPreview) {
-      stream.startPreview(previewView)
-    }
-    if (!stream.isOnPreview) {
-      diagnostics.text = "RTMP ERROR: camera preview did not start; no video can be sent"
-      Toast.makeText(this, "Camera video could not start", Toast.LENGTH_LONG).show()
-      return
-    }
-    stream.startStream(endpoint)
-    setLiveButton(false)
-    status.text = "● CONNECTING TO FACEBOOK..."
+    val base=server.text.toString().trim()
+    val streamKey=key.text.toString().trim()
+    if(base.isBlank()||streamKey.isBlank()) { Toast.makeText(this,"Enter the Facebook Server URL and Stream Key",Toast.LENGTH_LONG).show(); return }
+    if(!hasInternet()) { diagnostics.text="RTMP ERROR: no validated internet connection"; return }
+    if(!base.startsWith("rtmps://")&&!base.startsWith("rtmp://")) { diagnostics.text="RTMP ERROR: invalid server URL"; return }
+    getPreferences(MODE_PRIVATE).edit().putString("server",base).putString("key",streamKey).apply()
+    val endpoint=base.trimEnd('/')+"/"+streamKey.trimStart('/')
+    projectionRequestPending=true
+    val manager=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+    startActivityForResult(manager.createScreenCaptureIntent(),captureRequest)
   }
 
-  override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-    if (requestCode == 10 && !hasPermissions()) {
-      status.text = "● CAMERA/MIC PERMISSION REQUIRED"
-      status.setTextColor(Color.rgb(255, 80, 90))
-      diagnostics.text = "Grant camera and microphone permissions, then reopen CHEMCHEM TV KENYA"
-      goButton.isEnabled = false
-    } else if (requestCode == 10) {
-      if (hasPermissions()) {
-        initializeStreamingEngine()
-      } else {
-        goButton.isEnabled = false
-        diagnostics.text = "Camera and microphone permissions are required for Facebook streaming"
-      }
+  @Deprecated("Android API compatibility")
+  override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?) {
+    super.onActivityResult(requestCode,resultCode,data)
+    if(requestCode!=captureRequest) return
+    projectionRequestPending=false
+    if(resultCode!=Activity.RESULT_OK||data==null) {
+      diagnostics.text="Screen capture permission was cancelled. Facebook cannot receive PROGRAM video without it."
+      return
     }
+    renderProgramOutput(true)
+    val endpoint=server.text.toString().trim().trimEnd('/')+"/"+key.text.toString().trim().trimStart('/')
+    val serviceIntent=Intent(this,BroadcastService::class.java).apply {
+      putExtra(BroadcastService.EXTRA_PROJECTION,data)
+      putExtra("projection_result",resultCode)
+      putExtra(BroadcastService.EXTRA_ENDPOINT,endpoint)
+    }
+    ContextCompat.startForegroundService(this,serviceIntent)
+    status.text="● STARTING PROGRAM ENCODER..."
+    status.setTextColor(Color.rgb(255,193,7))
+    diagnostics.text="Screen capture granted. Starting H.264/AAC PROGRAM encoder and Facebook RTMPS."
   }
 
-  private fun hasInternet(): Boolean {
-    val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-    val n = cm.activeNetwork ?: return false
-    val caps = cm.getNetworkCapabilities(n) ?: return false
-    return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+  private fun hasInternet():Boolean {
+    val cm=getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+    val n=cm.activeNetwork ?: return false
+    val c=cm.getNetworkCapabilities(n) ?: return false
+    return c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)&&c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
   }
 
-  private fun hasPermissions(): Boolean =
-    ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED &&
-    ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+  private fun hasPermissions():Boolean =
+    ContextCompat.checkSelfPermission(this,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED
 
-  override fun onConnectionStarted(url: String) { runOnUiThread { status.text = "● CONNECTING..."; diagnostics.text = "RTMPS handshake started" } }
-  override fun onConnectionSuccess() { streaming = true; runOnUiThread { status.text = "● LIVE — CONNECTED"; status.setTextColor(Color.rgb(25, 198, 111)); diagnostics.text = "Facebook accepted the RTMPS connection; media is being sent"; setLiveButton(true) } }
-  override fun onConnectionFailed(reason: String) {
-    streaming = false
-    runOnUiThread {
-      status.text = "● CONNECTION FAILED"
-      status.setTextColor(Color.rgb(255, 80, 90)); diagnostics.text = "RTMP ERROR: " + reason; setLiveButton(false)
-      Toast.makeText(this, reason, Toast.LENGTH_LONG).show()
-    }
-  }
-  override fun onNewBitrate(bitrate: Long) { runOnUiThread { status.text = "● LIVE — CONNECTED  " + (bitrate / 1000) + " kbps"; status.setTextColor(Color.rgb(25, 198, 111)) } }
-  override fun onDisconnect() { streaming = false; runOnUiThread { status.text = "● READY"; status.setTextColor(Color.rgb(102, 221, 136)); diagnostics.text = "RTMP connection closed"; setLiveButton(false) } }
-  override fun onAuthError() { streaming = false; runOnUiThread { status.text = "● FACEBOOK AUTH ERROR"; status.setTextColor(Color.rgb(255, 80, 90)); diagnostics.text = "Facebook rejected the stream credentials"; setLiveButton(false) } }
-  override fun onAuthSuccess() {}
-  override fun onDestroy() {
-    if (::stream.isInitialized) {
-      if (stream.isStreaming) stream.stopStream()
-      if (stream.isOnPreview) stream.stopPreview()
-      stream.release()
-    }
-    super.onDestroy()
-  }
+  override fun onDestroy(){ unregisterReceiverSafe(); super.onDestroy() }
 }

@@ -12,5 +12,6 @@ function one(v: string | string[] | undefined) {
 export default async function ProgramOutput({ searchParams }: Props) {
   const q = await searchParams;
   const name = one(q.name) || "CHEMCHEM TV KENYA — LIVE OUTPUT";
-  return <OutputClient name={name} />;
+  const monitor = one(q.monitor) === "1";
+  return <OutputClient name={name} monitor={monitor} />;
 }

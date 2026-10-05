@@ -11,6 +11,7 @@ import android.util.Log
 import androidx.core.app.ServiceCompat
 import com.pedro.common.ConnectChecker
 import com.pedro.encoder.input.sources.audio.MicrophoneSource
+import com.pedro.encoder.input.sources.audio.InternalAudioSource
 import com.pedro.encoder.input.sources.video.NoVideoSource
 import com.pedro.encoder.input.sources.video.ScreenSource
 import com.pedro.library.generic.GenericStream
@@ -89,6 +90,9 @@ class BroadcastService : Service(), ConnectChecker {
       }
 
       newStream.changeVideoSource(screenSource)
+      if (Build.VERSION.SDK_INT >= 29) {
+        try { newStream.changeAudioSource(InternalAudioSource(projection!!)) } catch (_: Exception) {}
+      }
       stream?.release()
       stream = newStream
       sendStatus("ENCODER_READY","Program screen active • H.264 720p30 + AAC 128kbps")

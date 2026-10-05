@@ -91,6 +91,7 @@ export default function Home(){
   const lastAutoSlotRef=useRef("");
   const fileInputRef=useRef<HTMLInputElement>(null);
   const [newsOnAir,setNewsOnAir]=useState<NewsOnAir|null>(null);
+  const [broadcastDockOpen,setBroadcastDockOpen]=useState(false);
   useEffect(()=>{
     let cancelled=false;
     const loadNews=async()=>{try{const r=await fetch("/api/news?category=Kenya&source=STANDARD%20KENYA",{cache:"no-store"});const j=await r.json();const item=j.items?.[0];if(!cancelled&&item)setNewsOnAir(item)}catch{}};
@@ -328,17 +329,19 @@ export default function Home(){
     <nav className="workTabs">{tabs.map(([id,icon,label])=><button key={id} className={"workTab "+(section===id?"active":"")} onClick={()=>setSection(id)}><span>{icon}</span>{label}</button>)}</nav>
 
     <section className="workspace">
-      {section==="studio"&&<Studio
-        preview={previewMedia} program={programMedia} previewWebUrl={previewWebUrl} programWebUrl={programWebUrl} previewPlaying={previewPlaying} programPlaying={programPlaying}
-        previewTime={previewTime} programTime={programTime} volume={volume} muted={muted} fadeSpeed={fadeSpeed} setFadeSpeed={setFadeSpeed} channelLogoId={channelLogoId} setChannelLogoId={setChannelLogoId} showLogoMap={showLogoMap} setShowLogoMap={setShowLogoMap}
-        previewLayers={previewLayers} setPreviewLayers={setPreviewLayers} programLayers={programLayers}
-        setVolume={setVolume} setMuted={setMuted} togglePreview={togglePreview} stopPreview={stopPreview}
-        toggleProgram={toggleProgram} take={take} transition={transition} setTransition={setTransition} live={live} toggleLive={toggleLive}
-        onProgramEnded={()=>{const current=programMediaId;if(current&&playNextPlaylistItem(current))return;setProgramPlaying(false);setProgramTime(0);notify("Program item finished — waiting for the next scheduled item")}}
-        scenes={scenes} activeScene={activeScene} setActiveScene={setActiveScene} addScene={addScene}
-        sources={sources} activeSource={activeSource} setActiveSource={setActiveSource} addSource={addSource} addWebSource={addWebSource} switchProgramSource={switchProgramSource}
-        newsOnAir={newsOnAir} mediaFiles={mediaFiles} selectMedia={selectMedia} playMedia={playMedia} selectWeb={(url)=>{setPreviewMediaId("");setPreviewWebUrl(url);setPreviewPlaying(false);notify("Web page loaded into Preview")}} upload={()=>fileInputRef.current?.click()} cameraStream={cameraStreamRef.current} cameraReady={cameraReady} cameraFacing={cameraFacing} startCamera={startCamera} flipCamera={flipCamera} stopCamera={stopCamera} screenStream={screenStreamRef.current} screenReady={screenReady} startScreenShare={startScreenShare} stopScreenShare={stopScreenShare}
-      />}
+      <div style={{display:section==="studio"?"block":"none"}}>
+        <Studio
+          preview={previewMedia} program={programMedia} previewWebUrl={previewWebUrl} programWebUrl={programWebUrl} previewPlaying={previewPlaying} programPlaying={programPlaying}
+          previewTime={previewTime} programTime={programTime} volume={volume} muted={muted} fadeSpeed={fadeSpeed} setFadeSpeed={setFadeSpeed} channelLogoId={channelLogoId} setChannelLogoId={setChannelLogoId} showLogoMap={showLogoMap} setShowLogoMap={setShowLogoMap}
+          previewLayers={previewLayers} setPreviewLayers={setPreviewLayers} programLayers={programLayers}
+          setVolume={setVolume} setMuted={setMuted} togglePreview={togglePreview} stopPreview={stopPreview}
+          toggleProgram={toggleProgram} take={take} transition={transition} setTransition={setTransition} live={live} toggleLive={toggleLive}
+          onProgramEnded={()=>{const current=programMediaId;if(current&&playNextPlaylistItem(current))return;setProgramPlaying(false);setProgramTime(0);notify("Program item finished — waiting for the next scheduled item")}}
+          scenes={scenes} activeScene={activeScene} setActiveScene={setActiveScene} addScene={addScene}
+          sources={sources} activeSource={activeSource} setActiveSource={setActiveSource} addSource={addSource} addWebSource={addWebSource} switchProgramSource={switchProgramSource}
+          newsOnAir={newsOnAir} mediaFiles={mediaFiles} selectMedia={selectMedia} playMedia={playMedia} selectWeb={(url)=>{setPreviewMediaId("");setPreviewWebUrl(url);setPreviewPlaying(false);notify("Web page loaded into Preview")}} upload={()=>fileInputRef.current?.click()} cameraStream={cameraStreamRef.current} cameraReady={cameraReady} cameraFacing={cameraFacing} startCamera={startCamera} flipCamera={flipCamera} stopCamera={stopCamera} screenStream={screenStreamRef.current} screenReady={screenReady} startScreenShare={startScreenShare} stopScreenShare={stopScreenShare}
+        />
+      </div>
       {section==="playlist"&&<Playlist mediaFiles={mediaFiles} playlistIds={playlistIds} previewMediaId={previewMediaId} selectMedia={selectMedia} playMedia={playMedia} remove={removeMedia} move={movePlaylist} removeFromPlaylist={removeFromPlaylist} addToPlaylist={addToPlaylist} playNow={playPlaylistItem} upload={()=>fileInputRef.current?.click()}/>}
       {section==="schedule"&&<Schedule rows={schedule} now={scheduleClock} auto={autoSchedule} setAuto={setAutoSchedule} setRows={setSchedule} add={addProgramme} mediaFiles={mediaFiles} playNow={playScheduled} showLogoMap={showLogoMap} setShowLogoMap={setShowLogoMap} imageFiles={mediaFiles.filter(f=>f.type.startsWith("image/"))}/>} 
       {section==="news"&&<News notify={notify}/>}
@@ -347,6 +350,19 @@ export default function Home(){
       {section==="analytics"&&<Analytics live={live} program={programMedia} streamStartedAt={streamStartedAt} totalViews={totalViews} peakViewers={peakViewers} connected={connected}/>}
       {section==="settings"&&<Settings notify={notify}/>}
     </section>
+
+    <div style={{marginTop:14,border:"1px solid rgba(255,255,255,.12)",borderRadius:14,background:"#0b1524",overflow:"hidden"}}>
+      <button
+        onClick={()=>setBroadcastDockOpen(v=>!v)}
+        style={{width:"100%",padding:"14px 16px",background:"transparent",border:0,color:"white",display:"flex",justifyContent:"space-between",alignItems:"center",fontWeight:800,cursor:"pointer"}}
+      >
+        <span>◉ BROADCAST / STREAMING SUB-PAGE</span>
+        <span>{live?"● ON AIR":"○ STANDBY"} · {broadcastDockOpen?"CLOSE":"OPEN"}</span>
+      </button>
+      <div style={{display:broadcastDockOpen?"block":"none",padding:12}}>
+        <Streaming connected={connected} setConnected={setConnected} live={live} program={programMedia} preview={previewMedia} programWebUrl={programWebUrl}/>
+      </div>
+    </div>
 
     <input ref={fileInputRef} type="file" multiple accept="video/*,image/*,audio/*" hidden onChange={e=>{addFiles(e.target.files);e.currentTarget.value=""}}/>
     {toast&&<div className="toast">{toast}</div>}

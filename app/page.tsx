@@ -599,7 +599,7 @@ export default function Home(){
         <span>{live?"● ON AIR":"○ STANDBY"} · {broadcastDockOpen?"CLOSE":"OPEN"}</span>
       </button>
       <div style={{display:broadcastDockOpen?"block":"none",padding:12}}>
-        <Streaming connected={connected} setConnected={setConnected} live={live} program={programMedia} preview={previewMedia} programWebUrl={programWebUrl} livekitStatus={livekitStatus}/>
+        <Streaming connected={connected} setConnected={setConnected} live={live} program={programMedia} preview={previewMedia} programWebUrl={programWebUrl} livekitStatus={livekitStatus} connectorStatus={connectorStatus}/>
       </div>
     </div>
 

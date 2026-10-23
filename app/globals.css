@@ -220,3 +220,79 @@
 .newsroom.news-evening .newsStoryImage{box-shadow:inset -30px 0 45px rgba(115,48,199,.25)}
 @media(max-width:620px){.newsHeadline{grid-template-columns:1fr!important}.newsStoryImage{height:150px;min-height:150px}.newsStoryImage img{min-height:150px}.newsStoryContent>b{font-size:14px!important}}
 .connectedButton{background:#20b56b!important;color:#07130d!important;font-weight:900}.liveButton{background:#19c66f!important;color:#06130b!important;font-weight:900;box-shadow:0 0 0 2px rgba(25,198,111,.2),0 0 18px rgba(25,198,111,.2)}
+
+/* vMix-inspired control-room refresh: preserve existing studio behavior and routes */
+:root{color-scheme:dark;--vmx-bg:#06101d;--vmx-panel:#0b1b2c;--vmx-panel2:#10263a;--vmx-border:#24435d;--vmx-blue:#00a7ff;--vmx-cyan:#21d4fd;--vmx-green:#00d68f;--vmx-red:#ff3048;--vmx-text:#edf7ff;--vmx-muted:#91a9bd}
+html,body{background:var(--vmx-bg);color:var(--vmx-text)}
+button{transition:filter .15s ease,transform .15s ease;border:1px solid #294962}
+button:hover{filter:brightness(1.16)}
+.app{min-height:100dvh;background:radial-gradient(ellipse at top,#102b43 0%,#06101d 58%)}
+.sidebar{background:#071525;border-right:1px solid #1e4059;padding:14px 10px}
+.logo{background:linear-gradient(135deg,#00b8ff,#1465d8);border-radius:4px;color:#fff}
+.brand b{font-size:14px;letter-spacing:.3px}
+.air{background:#0c2133;border-color:#21445e}
+.air.on i{background:var(--vmx-red)}
+.nav{border-radius:5px;font-weight:700}
+.nav:hover,.nav.active{background:#12314a;box-shadow:inset 3px 0 var(--vmx-blue);color:#fff}
+.main{max-width:none;padding:14px 16px;min-width:0}
+header{padding:0 0 12px;border-bottom:1px solid #1d3a52}
+h1{font-size:clamp(20px,2vw,30px);letter-spacing:-.5px}
+.eyebrow{color:var(--vmx-cyan);letter-spacing:1.6px}
+.go,.big{background:linear-gradient(135deg,#ff334f,#c90d32);border:1px solid #ff6172;border-radius:5px;box-shadow:0 3px 12px #e21b382b}
+.panel,.metric{background:linear-gradient(180deg,#0d2032,#091827);border:1px solid var(--vmx-border);border-radius:6px;box-shadow:0 4px 14px #0002}
+.title,.obsTitle{color:#d5eafa;border-bottom:1px solid #1d3c54;padding-bottom:8px;font-weight:800;letter-spacing:.45px}
+.title em,.obsTitle em{color:var(--vmx-cyan)}
+.health,.dest{border-color:#1a374e}
+.health b{color:var(--vmx-green)}
+input,textarea,select{background:#071625!important;border:1px solid #284962!important;border-radius:4px!important;padding:9px!important;max-width:100%}
+input:focus,textarea:focus,select:focus{outline:1px solid var(--vmx-blue);border-color:var(--vmx-blue)!important}
+.buttons button,.title button,.dest button,.settings button{background:linear-gradient(180deg,#17364f,#10263a);border:1px solid #2d526e;border-radius:4px;font-weight:700}
+.libraryItem{background:#0b2032;border-color:#254761;border-radius:5px}
+.libraryItem.selected{border-color:var(--vmx-blue);background:#10344c;box-shadow:inset 3px 0 var(--vmx-blue)}
+.thumb{border:1px solid #254761;border-radius:4px}
+.canvasWrap{background:#06111e;border-color:#31546e;border-radius:5px;padding:5px}
+.canvasLabel{color:#d6edff;font-size:10px;letter-spacing:.5px}
+.canvas{border:1px solid #1c4059;border-radius:3px;background:#02060a}
+.canvasEmpty{color:#8ca5ba}
+.transition button,.transition select{background:#12314a;border:1px solid #2a5776}
+.news{background:linear-gradient(120deg,#0c2b44,#0b1b2b);border:1px solid #254b68}
+.ticker{background:#e71f3e}
+.metric strong{color:#f4fbff}
+.empty{border-color:#2b4b64;color:#8ea7bb}
+.toast{background:#0c2940;border-color:#32709a}
+.streamControls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:12px;background:#081827;border:1px solid #24435d;border-radius:6px}
+.streamControls label{min-width:0}
+.streamControls input[type=range]{width:100%;padding:0!important}
+.connectedButton{background:linear-gradient(180deg,#006e55,#004b42)!important;border-color:#00d68f!important}
+@media(min-width:1200px){.sidebar{width:218px}.main{padding:12px 18px}.grid,.two{gap:10px}.panel{padding:12px}.studioObs{gap:8px}}
+/* Touch-first landscape layout for phones; portrait shows a clear rotate prompt. */
+@media(max-width:900px) and (orientation:landscape){
+ .app{min-height:100dvh}
+ .sidebar{width:142px;flex:0 0 142px;padding:8px 6px}
+ .brand{gap:6px;margin-bottom:8px}.logo{width:30px;height:30px}.brand b{font-size:10px}.brand small{font-size:8px}
+ .air{padding:6px;font-size:9px;margin-bottom:6px}
+ .nav{padding:8px 6px;font-size:10px;margin:1px 0}.nav span{width:19px}
+ .sideFoot{font-size:8px}
+ .main{padding:8px;overflow-x:hidden}
+ header{margin-bottom:8px;gap:8px}h1{font-size:18px}.actions{gap:6px;font-size:9px}.go,.big{padding:8px 10px;font-size:10px}
+ .panel{padding:8px}.grid,.two{gap:8px}.cards{gap:6px}.metric{padding:8px}.metric strong{font-size:18px}
+ .studioObs{gap:6px}.obsTop{grid-template-columns:minmax(0,1fr) 58px minmax(0,1fr);gap:5px}
+ .canvasLabel{font-size:8px}.canvasLayer strong{font-size:14px}.canvasLayer span{font-size:10px}
+ .libraryItem{padding:6px;gap:6px}.thumb{width:42px;height:30px}
+ .title,.obsTitle{margin-bottom:7px;font-size:9px;padding-bottom:6px}
+ .buttons{gap:5px;margin-top:7px}.buttons button,.title button{padding:7px;font-size:9px}
+ .media{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+ .settings{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .streamControls{gap:7px;padding:8px}
+}
+@media(max-width:700px) and (orientation:portrait){
+ .app:before{content:"Rotate your phone to landscape for the CHEMCHEM live-production control room.";position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;text-align:center;padding:32px;background:#06101d;color:#eaf7ff;font-size:20px;font-weight:800;line-height:1.5}
+}
+@media(max-width:700px) and (orientation:landscape){
+ .sidebar{width:118px;flex-basis:118px}.main{padding:6px}
+ .cards{grid-template-columns:repeat(4,minmax(0,1fr))}
+ .media{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .two{grid-template-columns:minmax(0,1.5fr) minmax(180px,1fr)}
+ .grid{grid-template-columns:minmax(0,2fr) minmax(180px,1fr)}
+ .thead,.tr{grid-template-columns:70px 1.5fr 1fr 80px;padding:8px;font-size:10px}
+}
